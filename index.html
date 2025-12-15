@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quicklash: The Party Game</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Luckiest+Guy&family=Roboto+Condensed:wght@700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-color: #3b2ebd;
+            --bg-pattern: #3225a0;
+            --primary: #f5f5f5;
+            --accent-orange: #ff6b00;
+            --accent-green: #00e676;
+            --accent-pink: #ff0055;
+            --card-dark: #201a5e;
+            --border-color: #000000;
+            --border-width: 4px;
+            
+            --font-head: 'Luckiest Guy', cursive;
+            --font-sub: 'Bangers', cursive;
+            --font-body: 'Roboto Condensed', sans-serif;
+        }
+
+        * { box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            background-image: radial-gradient(var(--bg-pattern) 20%, transparent 20%), radial-gradient(var(--bg-pattern) 20%, transparent 20%);
+            background-position: 0 0, 10px 10px;
+            background-size: 20px 20px;
+            color: #000;
+            font-family: var(--font-body);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #app {
+            width: 100%;
+            max-width: 1000px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            padding: 20px;
+        }
+
+        .screen {
+            display: none;
+            width: 100%;
+            height: 100%;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .screen.active { display: flex; }
+
+        h1 {
+            font-family: var(--font-head);
+            font-size: clamp(4rem, 10vw, 7rem);
+            color: var(--accent-orange);
+            text-shadow: 4px 4px 0px #000;
+            -webkit-text-stroke: 2px black;
+            margin: 0;
+            transform: rotate(-3deg);
+            z-index: 10;
+        }
+
+        h2 {
+            font-family: var(--font-sub);
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            color: var(--accent-green);
+            text-shadow: 2px 2px 0px #000;
+            -webkit-text-stroke: 1px black;
+            margin: 10px 0;
+            text-align: center;
+        }
+
+        .card-container {
+            background: white;
+            border: var(--border-width) solid var(--border-color);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 10px 10px 0px rgba(0,0,0,0.5);
+            width: 100%;
+            max-width: 600px;
+            text-align: center;
+            position: relative;
+        }
+
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.5rem;
+            font-family: var(--font-body);
+            font-weight: bold;
+            border: 3px solid #000;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            background: #eee;
+            text-align: center;
+            resize: none;
+        }
+        
+        input[type="text"] {
+            text-transform: uppercase;
+        }
+
+        input:focus, textarea:focus { outline: none; background: #fff; border-color: var(--accent-pink); }
+
+        .btn {
+            background: var(--accent-orange);
+            color: white;
+            font-family: var(--font-sub);
+            font-size: 2rem;
+            letter-spacing: 1px;
+            border: 3px solid #000;
+            border-radius: 50px;
+            padding: 10px 40px;
+            cursor: pointer;
+            box-shadow: 5px 5px 0px #000;
+            transition: transform 0.1s, box-shadow 0.1s;
+            margin: 10px;
+        }
+        
+        .btn:hover:not(:disabled) { transform: translate(-2px, -2px); box-shadow: 7px 7px 0px #000; background: #ff8800; }
+        .btn:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 3px 3px 0px #000; }
+        .btn:disabled { background: #777; color: #ccc; cursor: not-allowed; box-shadow: none; transform: translate(5px, 5px); }
+
+        .player-badge {
+            display: inline-flex;
+            align-items: center;
+            background: #fff;
+            border: 3px solid #000;
+            padding: 5px 15px;
+            margin: 5px;
+            border-radius: 30px;
+            font-weight: bold;
+            font-size: 1.2rem;
+            box-shadow: 3px 3px 0 #000;
+        }
+        .avatar-circle {
+            width: 30px; height: 30px;
+            background: var(--accent-green);
+            border-radius: 50%;
+            border: 2px solid #000;
+            margin-right: 10px;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 0.8rem;
+        }
+
+        .battle-wrapper {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .battle-prompt {
+            background: #000;
+            color: #fff;
+            padding: 15px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            text-align: center;
+            border-radius: 10px;
+            box-shadow: 0 5px 0 rgba(0,0,0,0.3);
+            border: 2px solid #fff;
+            transform: rotate(-1deg);
+        }
+
+        .answer-btn {
+            background: #fff;
+            border: 4px solid #000;
+            border-radius: 15px;
+            padding: 20px;
+            min-height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: clamp(1.2rem, 4vw, 2rem);
+            font-weight: bold;
+            text-align: center;
+            cursor: pointer;
+            position: relative;
+            box-shadow: 8px 8px 0 rgba(0,0,0,0.2);
+            transition: all 0.2s;
+            word-break: break-word;
+        }
+
+        .answer-btn:hover { transform: scale(1.02); z-index: 5; }
+        .answer-btn.selected { background: var(--accent-orange); color: white; transform: scale(1.05); }
+        .answer-btn.dimmed { opacity: 0.5; filter: grayscale(1); cursor: default; }
+        .answer-btn.winner { background: var(--accent-green); color: black; animation: pulse 0.8s infinite; border-color: white; }
+
+        .vote-perc {
+            position: absolute;
+            right: -10px; top: -10px;
+            background: var(--accent-pink);
+            color: white;
+            border: 3px solid #000;
+            border-radius: 50%;
+            width: 70px; height: 70px;
+            display: flex; justify-content: center; align-items: center;
+            font-family: var(--font-sub);
+            font-size: 1.8rem;
+            transform: scale(0);
+            transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 20;
+        }
+
+        #quiplashBanner {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%) scale(0) rotate(-10deg);
+            background: var(--accent-pink);
+            color: #fff;
+            font-family: var(--font-head);
+            font-size: 5rem;
+            padding: 20px 50px;
+            border: 5px solid #fff;
+            box-shadow: 10px 10px 0 #000;
+            z-index: 100;
+            pointer-events: none;
+            text-shadow: 4px 4px 0 #000;
+            transition: transform 0.3s;
+        }
+        
+        .visible-quiplash { transform: translate(-50%, -50%) scale(1) rotate(-5deg) !important; }
+
+        .timer-container { width: 100%; height: 20px; background: #000; border-radius: 10px; margin-top: 15px; border: 2px solid white; overflow: hidden; }
+        .timer-bar { height: 100%; width: 100%; background: var(--accent-pink); transform-origin: left; }
+
+        @keyframes pulse { 0% { transform: scale(1.05); } 50% { transform: scale(1.08); } 100% { transform: scale(1.05); } }
+        @keyframes float { 0% { transform: translateY(0); } 50% { transform: translateY(-10px); } 100% { transform: translateY(0); } }
+
+        .top-bar {
+            position: absolute; top: 10px; left: 0; width: 100%;
+            display: flex; justify-content: space-between; padding: 0 20px;
+            pointer-events: none;
+        }
+        .info-tag {
+            background: #000; color: #fff; padding: 5px 15px;
+            border-radius: 20px; font-family: var(--font-body); font-weight: bold;
+            border: 2px solid var(--accent-green);
+        }
+    </style>
+</head>
+<body>
+
+<div id="quiplashBanner">QUICKLASH!</div>
+
+<div id="app">
+    <div class="top-bar">
+        <div class="info-tag" id="roleTag">Spectator</div>
+        <div class="info-tag" id="roundTag" style="display:none">ROUND 1</div>
+    </div>
+
+    <div id="screen-entry" class="screen active">
+        <h1 style="color:var(--accent-orange)">QUICKLASH</h1>
+        <h2 style="margin-top:-10px; color:#fff; -webkit-text-stroke:1px black;">The "Say Anything" Game</h2>
+        
+        <div class="card-container" style="transform: rotate(1deg);">
+            <input type="text" id="playerNameInput" placeholder="NAME" maxlength="10">
+            <input type="text" id="roomCodeInput" placeholder="ROOM CODE (To Join)" maxlength="4">
+            
+            <div style="display:flex; justify-content:center; flex-wrap:wrap;">
+                <button class="btn" id="btnHost" onclick="startHost()">HOST GAME</button>
+                <button class="btn" id="btnJoin" onclick="joinGame()" style="background:var(--accent-green)">JOIN GAME</button>
+            </div>
+            <p style="font-size:0.9rem; margin-top:10px; color:#666;">Created by E-Money.</p>
+        </div>
+    </div>
+
+    <div id="screen-lobby" class="screen">
+        <div class="card-container" style="max-width:800px;">
+            <p style="font-family:var(--font-sub); font-size:1.5rem; margin:0;">ROOM CODE</p>
+            <h1 id="lobbyRoomCode" style="font-size:5rem; color:#000; -webkit-text-stroke:0;">????</h1>
+            
+            <div style="border-top:3px dashed #ccc; margin: 20px 0;"></div>
+            
+            <h2 style="color:var(--accent-pink)">WHO'S HERE?</h2>
+            <div id="lobbyPlayerList" style="min-height:100px; display:flex; flex-wrap:wrap; justify-content:center;"></div>
+            
+            <p id="lobbyStatus" style="font-weight:bold; color:#555;">Waiting for players (Min 3)...</p>
+            
+            <button id="startGameBtn" class="btn" style="display:none; margin: 20px auto; min-width: 50%;" onclick="hostStartGame()">EVERYBODY'S IN!</button>
+        </div>
+    </div>
+
+    <div id="screen-input" class="screen">
+        <h2 id="inputRoundTitle" style="font-size:3rem; color:#fff; -webkit-text-stroke:2px black;">ROUND 1</h2>
+        
+        <div class="card-container" id="inputForm">
+            <div class="info-tag" style="background:var(--accent-orange); border:none; color:black; display:inline-block; margin-bottom:10px;" id="promptCounter">PROMPT 1/2</div>
+            <p id="inputPromptText" style="font-size: 1.8rem; font-weight:bold; margin: 10px 0 20px 0;">...</p>
+            
+            <textarea id="answerInput" rows="3" placeholder="WRITE SOMETHING FUNNY..." maxlength="45"></textarea>
+            
+            <button class="btn" onclick="submitCurrentAnswer(this)">SUBMIT QUIP</button>
+            <p style="font-size:0.8rem; color:#888;">Don't be boring.</p>
+        </div>
+
+        <div class="card-container" id="inputWaitMsg" style="display:none; transform: rotate(-2deg); padding: 40px;">
+            <h2 style="color:var(--accent-green)">DONE!</h2>
+            <p style="font-size:1.5rem; font-weight:bold;">Look at the screen, you genius.</p>
+            <div style="font-size: 4rem; animation: float 2s infinite; margin-top: 15px;">😎</div>
+        </div>
+    </div>
+
+    <div id="screen-vote" class="screen">
+        <div class="battle-wrapper" style="max-width: 600px;">
+            <div class="battle-prompt" id="votePromptText">Prompt goes here...</div>
+            
+            <div id="battleArea">
+                <div class="answer-btn" id="btnVoteA" onclick="castVote(0)">
+                    <span id="textVoteA">Answer A</span>
+                    <div class="vote-perc" id="percA">0%</div>
+                </div>
+
+                <div style="text-align:center; margin: 20px 0; z-index:10;">
+                    <span style="font-family:var(--font-head); font-size:3rem; color:var(--accent-pink); text-shadow:2px 2px 0 #fff; -webkit-text-stroke:1px black;">VS</span>
+                </div>
+
+                <div class="answer-btn" id="btnVoteB" onclick="castVote(1)">
+                    <span id="textVoteB">Answer B</span>
+                    <div class="vote-perc" id="percB">0%</div>
+                </div>
+            </div>
+            
+            <h2 id="voteStatus" style="font-size:1.5rem; color:#fff; background:black; display:inline-block; align-self:center; padding:5px 10px; transform:rotate(-2deg);">VOTE NOW!</h2>
+            
+            <div class="timer-container"><div class="timer-bar" id="voteTimer"></div></div>
+        </div>
+    </div>
+
+    <div id="screen-results" class="screen">
+        <h1 id="scoreTitle">STANDINGS</h1>
+        <div class="card-container" style="max-width:600px; padding:0;">
+            <div id="scoreboardList" style="text-align: left; padding: 20px;">
+            </div>
+            <div style="padding:20px; border-top:2px solid #eee; text-align: center;">
+                <button class="btn" id="nextRoundBtn" style="display:none; margin: 10px auto; min-width: 50%;" onclick="hostNextPhase()">NEXT ROUND</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const PROMPTS = [
+        "A rejected name for a Crayola crayon.",
+        "What the Queen keeps in her purse.",
+        "A bad thing to say after kissing someone.",
+        "The worst theme for a prom.",
+        "Something you shouldn't put in a piñata.",
+        "The name of a pizza place you should never visit.",
+        "A great opening line for a breakup letter.",
+        "What cats are really plotting.",
+        "A rejected flavor of ice cream.",
+        "The title of a memoir by a hamster.",
+        "Something you’d find in Donald Trump’s pockets.",
+        "The worst thing to hear from your surgeon.",
+        "A terrible name for a rap artist.",
+        "Why the chicken actually crossed the road.",
+        "A superpower that is actually super inconvenient.",
+        "The worst thing to whisper in a library.",
+        "What the Mona Lisa is smiling about."
+    ];
+
+    const SAFETY_QUIPS = [
+        "I forgot to write something.",
+        "Pee.",
+        "My mom.",
+        "Tax fraud.",
+        "A wet sock.",
+        "Just give me the points.",
+        "Uhhh...",
+        "I'm not funny."
+    ];
+
+    let peer, conn;
+    let connections = {};
+    let myId = null;
+    let isHost = false;
+    let playerName = "";
+    
+    let players = []; 
+    let round = 1; 
+    let battles = []; 
+    let currentBattleIndex = 0;
+    
+    let myPrompts = [];
+    let currentPromptIndex = 0;
+    let myAnswers = {}; 
+
+    const generateCode = () => {
+        const c = "ABCDEFGHJKLMNPQRSTUVWXYZ"; 
+        let res = ''; for(let i=0; i<4; i++) res += c.charAt(Math.floor(Math.random()*c.length));
+        return res;
+    };
+
+    const getSafetyQuip = () => SAFETY_QUIPS[Math.floor(Math.random() * SAFETY_QUIPS.length)];
+
+    const showScreen = (id) => {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+    };
+
+    const setSafeText = (id, txt) => {
+        const el = document.getElementById(id);
+        if(el) el.textContent = txt;
+    };
+
+    const broadcast = (data) => Object.values(connections).forEach(c => c.send(data));
+
+    function startHost() {
+        const btn = document.getElementById('btnHost');
+        
+        const rawName = document.getElementById('playerNameInput').value.trim();
+        if (!rawName) {
+            alert("You must enter a Name to host!");
+            return;
+        }
+
+        btn.disabled = true; btn.innerText = "STARTING...";
+        
+        playerName = rawName.substring(0,10).toUpperCase();
+        const code = generateCode();
+
+        peer = new Peer("ql-" + code, { debug: 1 });
+        
+        peer.on('open', (id) => {
+            myId = 'host'; isHost = true;
+            players = [{ id: 'host', name: playerName, score: 0 }];
+            showScreen('screen-lobby');
+            setSafeText('lobbyRoomCode', code);
+            setSafeText('roleTag', "HOST");
+            renderLobby();
+        });
+
+        peer.on('connection', (c) => {
+            c.on('open', () => {
+                connections[c.peer] = c;
+                c.on('data', (d) => handleHostData(c.peer, d));
+                c.on('close', () => {
+                    delete connections[c.peer];
+                    players = players.filter(p => p.id !== c.peer);
+                    renderLobby();
+                    broadcast({ type: 'UPDATE_LOBBY', players });
+                });
+            });
+        });
+
+        peer.on('error', (err) => {
+            if(err.type === 'unavailable-id') { 
+                peer.destroy(); setTimeout(startHost, 100);
+            } else {
+                alert("Connection Error. Try again.");
+                btn.disabled = false;
+                btn.innerText = "HOST GAME";
+            }
+        });
+    }
+
+    function handleHostData(pid, data) {
+        if (data.type === 'JOIN') {
+            const name = (data.name || "Anon").substring(0,12).toUpperCase();
+            if(!players.find(p=>p.id === pid)) {
+                players.push({ id: pid, name, score: 0 });
+                renderLobby();
+                broadcast({ type: 'UPDATE_LOBBY', players });
+            }
+        }
+        else if (data.type === 'SUBMIT_ANSWERS') {
+            const entries = data.answers;
+            for (let bIndex in entries) {
+                const battle = battles[bIndex];
+                if (battle) {
+                    let txt = entries[bIndex];
+                    if(!txt || txt.trim() === "") txt = getSafetyQuip();
+                    
+                    if (battle.p1Id === pid) battle.a1 = txt;
+                    if (battle.p2Id === pid) battle.a2 = txt;
+                }
+            }
+            checkAllAnswersReceived();
+        }
+        else if (data.type === 'VOTE') {
+            const b = battles[currentBattleIndex];
+            if (b) {
+                if (data.choice === 0) b.votesA++;
+                else b.votesB++;
+            }
+        }
+    }
+
+    function renderLobby() {
+        const div = document.getElementById('lobbyPlayerList');
+        div.innerHTML = players.map(p => `
+            <div class="player-badge">
+                <div class="avatar-circle">${p.name.substring(0,1)}</div>
+                ${p.name}
+            </div>
+        `).join('');
+        
+        const btn = document.getElementById('startGameBtn');
+        const status = document.getElementById('lobbyStatus');
+        
+        if(players.length >= 3) {
+            if (isHost) {
+                btn.style.display = 'block';
+                status.style.display = 'none';
+            } else {
+                btn.style.display = 'none';
+                status.textContent = "WAITING FOR HOST TO START...";
+            }
+        } else {
+            btn.style.display = 'none';
+            status.textContent = `NEED ${3-players.length} MORE PLAYER(S)...`;
+            status.style.display = 'block';
+        }
+    }
+
+    function hostStartGame() {
+        if(players.length < 3) return;
+        round = 1;
+        startRound();
+    }
+
+    function startRound() {
+        battles = [];
+        document.getElementById('roundTag').style.display = 'block';
+        document.getElementById('roundTag').textContent = round === 3 ? "FINAL ROUND" : "ROUND " + round;
+
+        const count = players.length;
+        const shuffledPlayers = [...players].sort(()=>0.5-Math.random());
+        const shuffledPrompts = [...PROMPTS].sort(()=>0.5-Math.random());
+
+        if (round === 3) {
+            const finalPrompt = shuffledPrompts[0];
+            for(let i=0; i<count; i++) {
+                let p1 = shuffledPlayers[i];
+                let p2 = shuffledPlayers[(i+1)%count];
+                battles.push({
+                    id: i,
+                    prompt: finalPrompt,
+                    p1Id: p1.id, p2Id: p2.id,
+                    a1: null, a2: null,
+                    votesA: 0, votesB: 0
+                });
+            }
+        } else {
+            for(let i=0; i<count; i++) {
+                let p1 = shuffledPlayers[i];
+                let p2 = shuffledPlayers[(i+1)%count];
+                let prompt = shuffledPrompts[i] || "Prompt shortage!";
+                battles.push({
+                    id: i, prompt: prompt,
+                    p1Id: p1.id, p2Id: p2.id,
+                    a1: null, a2: null,
+                    votesA: 0, votesB: 0
+                });
+            }
+        }
+
+        players.forEach(p => {
+            const pBattles = battles.filter(b => b.p1Id === p.id || b.p2Id === p.id);
+            const promptData = pBattles.map(b => ({ battleIndex: b.id, text: b.prompt }));
+            
+            if(p.id === 'host') handleClientStartRound(promptData);
+            else connections[p.id].send({ type: 'START_ROUND', prompts: promptData });
+        });
+
+        if(isHost) showScreen('screen-input');
+    }
+
+    function checkAllAnswersReceived() {
+        const allAnswered = battles.every(b => b.a1 && b.a2);
+        if(allAnswered) {
+            currentBattleIndex = 0;
+            setTimeout(startVotingPhase, 1000);
+        }
+    }
+
+    function startVotingPhase() {
+        if(currentBattleIndex >= battles.length) {
+            showResults();
+            return;
+        }
+
+        const b = battles[currentBattleIndex];
+        b.votesA = 0; b.votesB = 0;
+
+        const packet = {
+            type: 'VOTE_PHASE',
+            prompt: b.prompt,
+            a1: b.a1, a2: b.a2,
+            p1Id: b.p1Id, p2Id: b.p2Id
+        };
+        
+        broadcast(packet);
+        renderVoteScreen(packet);
+
+        let voteTime = 15000;
+        
+        const timer = document.getElementById('voteTimer');
+        timer.style.transition = 'none';
+        timer.style.width = '100%';
+        setTimeout(() => {
+            timer.style.transition = `width ${voteTime}ms linear`;
+            timer.style.width = '0%';
+        }, 100);
+
+        setTimeout(calculateBattleResults, voteTime + 1000);
+    }
+
+    function calculateBattleResults() {
+        const b = battles[currentBattleIndex];
+        const total = b.votesA + b.votesB;
+        let pA = 0, pB = 0;
+        
+        if (total > 0) {
+            pA = Math.round((b.votesA / total) * 100);
+            pB = 100 - pA;
+        }
+
+        const mult = (round === 3) ? 3 : (round === 2 ? 2 : 1);
+        const baseScore = 1000 * mult;
+        
+        let scoreA = 0, scoreB = 0;
+        let isQuiplash = false;
+
+        if (total > 0) {
+            if (pA === 100) { scoreA += 1000; isQuiplash = true; }
+            if (pB === 100) { scoreB += 1000; isQuiplash = true; }
+            
+            scoreA += Math.floor((pA / 100) * baseScore);
+            scoreB += Math.floor((pB / 100) * baseScore);
+        }
+
+        const pl1 = players.find(p => p.id === b.p1Id);
+        const pl2 = players.find(p => p.id === b.p2Id);
+        if(pl1) pl1.score += scoreA;
+        if(pl2) pl2.score += scoreB;
+
+        const resPacket = {
+            type: 'VOTE_RESULT',
+            pA: pA, pB: pB,
+            scoreAddA: scoreA, scoreAddB: scoreB,
+            isQuiplash: isQuiplash,
+            nameA: pl1 ? pl1.name : "Unknown",
+            nameB: pl2 ? pl2.name : "Unknown"
+        };
+        broadcast(resPacket);
+        renderVoteResult(resPacket);
+
+        setTimeout(() => {
+            currentBattleIndex++;
+            startVotingPhase();
+        }, 7000);
+    }
+
+    function showResults() {
+        players.sort((a,b) => b.score - a.score);
+        const packet = { type: 'SHOW_SCORES', players, isFinal: (round === 3) };
+        broadcast(packet);
+        renderScoreboard(packet);
+    }
+
+    function hostNextPhase() {
+        if (round < 3) {
+            round++;
+            startRound();
+        } else {
+            location.reload();
+        }
+    }
+
+    function joinGame() {
+        const btn = document.getElementById('btnJoin');
+        
+        const rawName = document.getElementById('playerNameInput').value.trim();
+        if (!rawName) {
+            alert("You must enter a Name to join!");
+            return;
+        }
+
+        btn.disabled = true; btn.innerText = "SEARCHING...";
+        
+        playerName = rawName.substring(0,10);
+        const code = document.getElementById('roomCodeInput').value.toUpperCase();
+        
+        peer = new Peer({ debug: 1 });
+        peer.on('open', (id) => {
+            myId = id;
+            conn = peer.connect("ql-" + code);
+            
+            conn.on('open', () => {
+                conn.send({ type: 'JOIN', name: playerName });
+                showScreen('screen-lobby');
+                setSafeText('lobbyRoomCode', code);
+                setSafeText('roleTag', playerName);
+            });
+            conn.on('data', d => handleClientData(d));
+            conn.on('close', () => alert("Host ended the game."));
+            
+            setTimeout(() => {
+                if(!conn.open) { 
+                    alert("Room not found!"); 
+                    btn.disabled = false; btn.innerText="JOIN GAME"; 
+                }
+            }, 3000);
+        });
+    }
+
+    function handleClientData(data) {
+        if(data.type === 'UPDATE_LOBBY') { players = data.players; renderLobby(); }
+        else if (data.type === 'START_ROUND') handleClientStartRound(data.prompts);
+        else if (data.type === 'VOTE_PHASE') renderVoteScreen(data);
+        else if (data.type === 'VOTE_RESULT') renderVoteResult(data);
+        else if (data.type === 'SHOW_SCORES') renderScoreboard(data);
+    }
+
+    function handleClientStartRound(prompts) {
+        myPrompts = prompts;
+        currentPromptIndex = 0;
+        myAnswers = {};
+        renderCurrentInput();
+        showScreen('screen-input');
+        document.getElementById('inputForm').style.display = 'block';
+        document.getElementById('inputWaitMsg').style.display = 'none';
+    }
+
+    function renderCurrentInput() {
+        const p = myPrompts[currentPromptIndex];
+        setSafeText('inputRoundTitle', round === 3 ? "FINAL ROUND" : `ROUND ${round}`);
+        setSafeText('promptCounter', `PROMPT ${currentPromptIndex + 1}/${myPrompts.length}`);
+        setSafeText('inputPromptText', p.text);
+        document.getElementById('answerInput').value = "";
+        document.getElementById('answerInput').focus();
+    }
+
+    function submitCurrentAnswer(btn) {
+        let txt = document.getElementById('answerInput').value.trim();
+        
+        if (txt === "") {
+            alert("You can't submit nothing! Write something funny.");
+            return;
+        }
+
+        const p = myPrompts[currentPromptIndex];
+        myAnswers[p.battleIndex] = txt;
+        
+        currentPromptIndex++;
+        if(currentPromptIndex < myPrompts.length) {
+            renderCurrentInput();
+        } else {
+            document.getElementById('inputForm').style.display = 'none';
+            document.getElementById('inputWaitMsg').style.display = 'block';
+            
+            if (isHost) {
+                const entries = myAnswers;
+                for (let bIndex in entries) {
+                    const battle = battles[bIndex];
+                    if (battle) {
+                        let val = entries[bIndex];
+                        if(!val || val.trim() === "") val = getSafetyQuip();
+                        if (battle.p1Id === myId) battle.a1 = val;
+                        if (battle.p2Id === myId) battle.a2 = val;
+                    }
+                }
+                checkAllAnswersReceived();
+            } else {
+                conn.send({ type: 'SUBMIT_ANSWERS', answers: myAnswers });
+            }
+        }
+    }
+
+    function renderVoteScreen(data) {
+        showScreen('screen-vote');
+        
+        setSafeText('votePromptText', data.prompt);
+        setSafeText('textVoteA', data.a1);
+        setSafeText('textVoteB', data.a2);
+        
+        const btnA = document.getElementById('btnVoteA');
+        const btnB = document.getElementById('btnVoteB');
+        [btnA, btnB].forEach(b => {
+            b.classList.remove('dimmed', 'winner', 'selected');
+            b.style.pointerEvents = 'auto';
+        });
+
+        document.getElementById('percA').style.transform = 'scale(0)';
+        document.getElementById('percB').style.transform = 'scale(0)';
+        document.getElementById('quiplashBanner').classList.remove('visible-quiplash');
+
+        const imFighter = (myId === data.p1Id || myId === data.p2Id);
+        
+        if (imFighter) {
+            setSafeText('voteStatus', "YOU'RE IN! (DON'T VOTE)");
+            btnA.style.pointerEvents = 'none';
+            btnB.style.pointerEvents = 'none';
+            btnA.classList.add('dimmed');
+            btnB.classList.add('dimmed');
+        } else {
+            setSafeText('voteStatus', "TAP THE BEST ONE!");
+            const timer = document.getElementById('voteTimer');
+            timer.style.transition = 'none';
+            timer.style.width = '100%';
+            setTimeout(() => {
+                timer.style.transition = `width 15s linear`;
+                timer.style.width = '0%';
+            }, 50);
+        }
+    }
+
+    function castVote(choice) {
+        const btnA = document.getElementById('btnVoteA');
+        const btnB = document.getElementById('btnVoteB');
+        
+        if (choice === 0) {
+            btnA.classList.add('selected');
+            btnB.classList.add('dimmed');
+        } else {
+            btnB.classList.add('selected');
+            btnA.classList.add('dimmed');
+        }
+        btnA.style.pointerEvents = 'none';
+        btnB.style.pointerEvents = 'none';
+        setSafeText('voteStatus', "VOTE LOCKED!");
+
+        if (isHost) {
+            const b = battles[currentBattleIndex];
+            if(choice === 0) b.votesA++; else b.votesB++;
+        } else {
+            conn.send({ type: 'VOTE', choice: choice });
+        }
+    }
+
+    function renderVoteResult(data) {
+        setSafeText('voteStatus', "RESULTS!");
+        
+        const pA = document.getElementById('percA');
+        const pB = document.getElementById('percB');
+        
+        setSafeText('textVoteA', `"${document.getElementById('textVoteA').innerText}"`);
+        document.getElementById('textVoteA').innerHTML += `<br><span style="font-size:1rem; color:#666; margin-top:5px; display:block;">— ${data.nameA}</span>`;
+        
+        document.getElementById('textVoteB').innerHTML += `<br><span style="font-size:1rem; color:#666; margin-top:5px; display:block;">— ${data.nameB}</span>`;
+
+        pA.style.transform = 'scale(1)';
+        pB.style.transform = 'scale(1)';
+        animateValue(pA, 0, data.pA, 1000);
+        animateValue(pB, 0, data.pB, 1000);
+
+        setTimeout(() => {
+            if (data.pA > data.pB) document.getElementById('btnVoteA').classList.add('winner');
+            else if (data.pB > data.pA) document.getElementById('btnVoteB').classList.add('winner');
+            else if (data.pA === data.pB && data.pA > 0) { }
+
+            if (data.isQuiplash) {
+                const banner = document.getElementById('quiplashBanner');
+                banner.classList.add('visible-quiplash');
+                confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+                
+                setTimeout(() => {
+                    banner.classList.remove('visible-quiplash');
+                }, 3000);
+            }
+        }, 1200);
+    }
+
+    function animateValue(obj, start, end, duration) {
+        let startTimestamp = null;
+        const step = (timestamp) => {
+            if (!startTimestamp) startTimestamp = timestamp;
+            const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+            obj.innerHTML = Math.floor(progress * (end - start) + start) + "%";
+            if (progress < 1) {
+                window.requestAnimationFrame(step);
+            }
+        };
+        window.requestAnimationFrame(step);
+    }
+
+    function renderScoreboard(data) {
+        showScreen('screen-results');
+        
+        document.getElementById('quiplashBanner').classList.remove('visible-quiplash');
+
+        const list = document.getElementById('scoreboardList');
+        list.innerHTML = '';
+        
+        setSafeText('scoreTitle', data.isFinal ? "GAME OVER" : "STANDINGS");
+        if(data.isFinal) confetti({ particleCount: 300, spread: 100 });
+
+        data.players.forEach((p, i) => {
+            const row = document.createElement('div');
+            let bg = "#f0f0f0";
+            let border = "#ccc";
+            if (i===0) { bg = "#ffd700"; border="#b8860b"; }
+            if (i===1) { bg = "#c0c0c0"; border="#7f7f7f"; }
+            if (i===2) { bg = "#cd7f32"; border="#8b4513"; }
+
+            row.style.cssText = `
+                background: ${bg}; border: 3px solid ${border};
+                margin-bottom: 10px; padding: 15px; border-radius: 10px;
+                display: flex; justify-content: space-between; align-items: center;
+                font-family: var(--font-sub); font-size: 1.5rem;
+                box-shadow: 5px 5px 0 rgba(0,0,0,0.1);
+            `;
+            
+            row.innerHTML = `
+                <div style="display:flex; align-items:center;">
+                    <div style="font-size:2rem; width:40px; text-align:center; margin-right:10px;">${i+1}</div>
+                    <div>${p.name}</div>
+                </div>
+                <div>${p.score}</div>
+            `;
+            list.appendChild(row);
+        });
+
+        if (isHost) {
+            const btn = document.getElementById('nextRoundBtn');
+            btn.style.display = 'block';
+            btn.innerText = data.isFinal ? "START NEW GAME" : "START NEXT ROUND";
+        }
+    }
+</script>
+</body>
+</html>
