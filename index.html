@@ -62,6 +62,7 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
+            overflow-y: auto;
         }
         .screen.active { display: flex; }
 
@@ -187,6 +188,7 @@
             padding: 20px;
             min-height: 120px;
             display: flex;
+            flex-direction: column; /* Added for better layout of name/answer */
             align-items: center;
             justify-content: center;
             font-size: clamp(1.2rem, 4vw, 2rem);
@@ -277,6 +279,19 @@
             border-radius: 20px; font-family: var(--font-body); font-weight: bold;
             border: 2px solid var(--accent-green);
         }
+
+        #finalVoteList {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+            width: 100%;
+            max-width: 800px;
+        }
+        @media (min-width: 600px) {
+            #finalVoteList {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
     </style>
 </head>
 <body>
@@ -327,6 +342,10 @@
         <div class="card-container" id="inputForm">
             <div id="inputTimer" class="timer-float">90</div>
             
+            <div id="finalRoundNotice" style="display:none; background: var(--accent-pink); color: white; padding: 10px; border-radius: 8px; font-weight: bold; margin-bottom: 15px; font-family: var(--font-sub); font-size: 1.5rem; letter-spacing: 1px; transform: rotate(-1deg);">
+                EVERYONE ANSWERS THIS PROMPT!
+            </div>
+            
             <div class="info-tag" style="background:var(--accent-orange); border:none; color:black; display:inline-block; margin-bottom:10px;" id="promptCounter">PROMPT 1/2</div>
             <p id="inputPromptText" style="font-size: 1.8rem; font-weight:bold; margin: 10px 0 20px 0;">...</p>
             
@@ -338,7 +357,7 @@
 
         <div class="card-container" id="inputWaitMsg" style="display:none; transform: rotate(-2deg); padding: 40px;">
             <h2 style="color:var(--accent-green)">DONE!</h2>
-            <p style="font-size:1.5rem; font-weight:bold;">The other folk are still grinding their cogs.</p>
+            <p style="font-size:1.5rem; font-weight:bold;">The other folks are still grinding their cogs...</p>
             <div style="font-size: 4rem; animation: float 2s infinite; margin-top: 15px;">😎</div>
         </div>
     </div>
@@ -368,6 +387,18 @@
             <div class="timer-container">
                 <div class="timer-bar" id="voteTimerBar"></div>
                 <div class="timer-text" id="voteTimerText">20s</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="screen-final-vote" class="screen">
+        <div class="battle-wrapper" style="width:100%; max-width: 800px; padding-bottom:50px;">
+             <div class="battle-prompt" id="finalVotePromptText">Prompt goes here...</div>
+             <div id="finalVoteList"></div>
+             <h2 id="finalVoteStatus" style="font-size:1.5rem; color:#fff; background:black; display:inline-block; align-self:center; padding:5px 10px; transform:rotate(-2deg);">VOTE FOR YOUR FAVORITE!</h2>
+            <div class="timer-container">
+                <div class="timer-bar" id="finalVoteTimerBar"></div>
+                <div class="timer-text" id="finalVoteTimerText">20s</div>
             </div>
         </div>
     </div>
@@ -498,6 +529,10 @@
     let battles = []; 
     let currentBattleIndex = 0;
     
+    let finalRoundAnswers = {};
+    let finalRoundPrompt = "";
+    let finalVotes = {};
+
     let availablePrompts = [];
     
     let myPrompts = [];
@@ -611,20 +646,32 @@
         });
     }
 
+    function processPlayerAnswers(pid, answers) {
+        if (round === 3) {
+            const finalAnswer = (answers.final || "").trim() || getSafetyQuip();
+            finalRoundAnswers[pid] = finalAnswer;
+        } else {
+            for (let bIndex in answers) {
+                const battle = battles[bIndex];
+                if (battle) {
+                    let txt = (answers[bIndex] || "").trim() || getSafetyQuip();
+                    if (battle.p1Id === pid) battle.a1 = txt;
+                    if (battle.p2Id === pid) battle.a2 = txt;
+                }
+            }
+        }
+        checkAllAnswersReceived();
+    }
+
     function handleHostData(pid, data) {
         if (data.type === 'JOIN') {
             const name = (data.name || "Anon").substring(0,12).toUpperCase();
             
-            // Check for duplicate name
             const isNameTaken = players.some(p => p.name.toUpperCase() === name.toUpperCase());
             if (isNameTaken) {
-                const connToReject = connections[pid];
-                if (connToReject) {
-                    connToReject.send({ type: 'JOIN_REJECTED', reason: 'That name is already taken!' });
-                    // Give the message time to send before closing
-                    setTimeout(() => connToReject.close(), 500);
-                }
-                return; // Stop processing
+                connections[pid]?.send({ type: 'JOIN_REJECTED', reason: 'That name is already taken!' });
+                setTimeout(() => connections[pid]?.close(), 500);
+                return;
             }
 
             if(!players.find(p=>p.id === pid)) {
@@ -634,27 +681,18 @@
             }
         }
         else if (data.type === 'SUBMIT_ANSWERS') {
-            const entries = data.answers;
-            for (let bIndex in entries) {
-                const battle = battles[bIndex];
-                if (battle) {
-                    let txt = entries[bIndex];
-                    if(!txt || txt.trim() === "") txt = getSafetyQuip();
-                    
-                    if (battle.p1Id === pid) battle.a1 = txt;
-                    if (battle.p2Id === pid) battle.a2 = txt;
-                }
-            }
-            checkAllAnswersReceived();
+            processPlayerAnswers(pid, data.answers);
         }
         else if (data.type === 'VOTE') {
             const b = battles[currentBattleIndex];
             if (b) {
-                if (data.choice === 0) b.votesA++;
-                else b.votesB++;
-
+                if (data.choice === 0) b.votesA++; else b.votesB++;
                 checkAllVotesReceived();
             }
+        }
+        else if (data.type === 'FINAL_VOTE') {
+            finalVotes[pid] = data.votedForId;
+            checkAllFinalVotesReceived();
         }
     }
 
@@ -698,8 +736,6 @@
         roundTag.textContent = round === 3 ? "FINAL ROUND" : "ROUND " + round;
 
         const count = players.length;
-        const shuffledPlayers = [...players].sort(()=>0.5-Math.random());
-        
         availablePrompts.sort(()=>0.5-Math.random());
 
         if (availablePrompts.length < count) {
@@ -707,49 +743,33 @@
         }
 
         if (round === 3) {
-            const finalPrompt = availablePrompts.pop() || "Prompt shortage!";
-            
-            for(let i=0; i<count; i++) {
-                let p1 = shuffledPlayers[i];
-                let p2 = shuffledPlayers[(i+1)%count];
-                battles.push({
-                    id: i,
-                    prompt: finalPrompt,
-                    p1Id: p1.id, p2Id: p2.id,
-                    a1: null, a2: null,
-                    votesA: 0, votesB: 0
-                });
-            }
+            finalRoundAnswers = {};
+            finalVotes = {};
+            finalRoundPrompt = availablePrompts.pop() || "The meaning of life.";
+            const promptData = [{ battleIndex: 'final', text: finalRoundPrompt }];
+            players.forEach(p => {
+                 if(p.id === 'host') handleClientStartRound(promptData, round);
+                 else connections[p.id].send({ type: 'START_ROUND', prompts: promptData, currentRound: round });
+            });
         } else {
+            const shuffledPlayers = [...players].sort(()=>0.5-Math.random());
             for(let i=0; i<count; i++) {
-                let p1 = shuffledPlayers[i];
-                let p2 = shuffledPlayers[(i+1)%count];
-                
-                let prompt = availablePrompts.pop() || "Prompt shortage!";
-                
                 battles.push({
-                    id: i, prompt: prompt,
-                    p1Id: p1.id, p2Id: p2.id,
-                    a1: null, a2: null,
-                    votesA: 0, votesB: 0
+                    id: i, prompt: availablePrompts.pop() || "Prompt shortage!",
+                    p1Id: shuffledPlayers[i].id, p2Id: shuffledPlayers[(i+1)%count].id,
+                    a1: null, a2: null, votesA: 0, votesB: 0
                 });
             }
+            players.forEach(p => {
+                const pBattles = battles.filter(b => b.p1Id === p.id || b.p2Id === p.id);
+                const promptData = pBattles.map(b => ({ battleIndex: b.id, text: b.prompt }));
+                if(p.id === 'host') handleClientStartRound(promptData, round);
+                else connections[p.id].send({ type: 'START_ROUND', prompts: promptData, currentRound: round });
+            });
         }
 
-        players.forEach(p => {
-            const pBattles = battles.filter(b => b.p1Id === p.id || b.p2Id === p.id);
-            const promptData = pBattles.map(b => ({ battleIndex: b.id, text: b.prompt }));
-            
-            if(p.id === 'host') handleClientStartRound(promptData, round);
-            else connections[p.id].send({ type: 'START_ROUND', prompts: promptData, currentRound: round });
-        });
-
         broadcast({ type: 'START_TIMER', duration: INPUT_TIME_LIMIT, phase: 'input' });
-        
-        runLocalTimer(INPUT_TIME_LIMIT, 'inputTimer', null, () => {
-           handleInputTimeout(); 
-        });
-
+        runLocalTimer(INPUT_TIME_LIMIT, 'inputTimer', null, () => handleInputTimeout());
         if(isHost) showScreen('screen-input');
     }
 
@@ -759,36 +779,52 @@
             broadcast({ type: 'FORCE_SUBMIT' });
             
             setTimeout(() => {
-                battles.forEach(b => {
-                    if (!b.a1) b.a1 = getSafetyQuip();
-                    if (!b.a2) b.a2 = getSafetyQuip();
-                });
-                currentBattleIndex = 0;
-                startVotingPhase();
+                if (round === 3) {
+                    players.forEach(p => {
+                        if (!finalRoundAnswers[p.id]) finalRoundAnswers[p.id] = getSafetyQuip();
+                    });
+                    startFinalVotingPhase();
+                } else {
+                    battles.forEach(b => {
+                        if (!b.a1) b.a1 = getSafetyQuip();
+                        if (!b.a2) b.a2 = getSafetyQuip();
+                    });
+                    currentBattleIndex = 0;
+                    startVotingPhase();
+                }
             }, 2000);
         }
     }
 
     function checkAllAnswersReceived() {
-        const allAnswered = battles.every(b => b.a1 && b.a2);
-        if(allAnswered) {
-            clearInterval(gameTimerInterval);
-            currentBattleIndex = 0;
-            setTimeout(startVotingPhase, 500);
+        if (round === 3) {
+            if (Object.keys(finalRoundAnswers).length >= players.length) {
+                clearInterval(gameTimerInterval);
+                setTimeout(startFinalVotingPhase, 500);
+            }
+        } else {
+            if (battles.every(b => b.a1 && b.a2)) {
+                clearInterval(gameTimerInterval);
+                currentBattleIndex = 0;
+                setTimeout(startVotingPhase, 500);
+            }
         }
     }
     
     function checkAllVotesReceived() {
         const b = battles[currentBattleIndex];
         if (!b) return;
-
         const expectedVotes = Math.max(1, players.length - 2); 
-        
-        const currentVotes = b.votesA + b.votesB;
-
-        if (currentVotes >= expectedVotes) {
+        if (b.votesA + b.votesB >= expectedVotes) {
             clearInterval(gameTimerInterval);
             calculateBattleResults();
+        }
+    }
+
+    function checkAllFinalVotesReceived() {
+        if (Object.keys(finalVotes).length >= players.length) {
+             clearInterval(gameTimerInterval);
+             calculateFinalResults();
         }
     }
 
@@ -797,29 +833,37 @@
             showResults();
             return;
         }
-
         const b = battles[currentBattleIndex];
         b.votesA = 0; b.votesB = 0;
-
         const packet = {
-            type: 'VOTE_PHASE',
-            prompt: b.prompt,
-            a1: b.a1, a2: b.a2,
-            p1Id: b.p1Id, p2Id: b.p2Id,
-            duration: VOTE_TIME_LIMIT
+            type: 'VOTE_PHASE', prompt: b.prompt, a1: b.a1, a2: b.a2,
+            p1Id: b.p1Id, p2Id: b.p2Id, duration: VOTE_TIME_LIMIT
         };
-        
         broadcast(packet);
         renderVoteScreen(packet);
+        runLocalTimer(VOTE_TIME_LIMIT, 'voteTimerText', 'voteTimerBar', () => calculateBattleResults());
+    }
 
-        runLocalTimer(VOTE_TIME_LIMIT, 'voteTimerText', 'voteTimerBar', () => {
-             calculateBattleResults();
-        });
+    function startFinalVotingPhase() {
+        const payload = players.map(p => ({ 
+            playerId: p.id, 
+            playerName: p.name,
+            answer: finalRoundAnswers[p.id] || getSafetyQuip() 
+        }));
+
+        const packet = {
+            type: 'FINAL_VOTE_PHASE',
+            prompt: finalRoundPrompt,
+            answers: payload,
+            duration: VOTE_TIME_LIMIT,
+        };
+        broadcast(packet);
+        renderFinalVoteScreen(packet);
+        runLocalTimer(VOTE_TIME_LIMIT, 'finalVoteTimerText', 'finalVoteTimerBar', () => calculateFinalResults());
     }
 
     function calculateBattleResults() {
         clearInterval(gameTimerInterval); 
-        
         const b = battles[currentBattleIndex];
         const total = b.votesA + b.votesB;
         let pA = 0, pB = 0;
@@ -829,7 +873,7 @@
             pB = 100 - pA;
         }
 
-        const mult = (round === 3) ? 3 : (round === 2 ? 2 : 1);
+        const mult = (round === 2 ? 2 : 1);
         const baseScore = 1000 * mult;
         
         let scoreA = 0, scoreB = 0;
@@ -838,7 +882,6 @@
         if (total > 0) {
             if (pA === 100) { scoreA += 1000; isQuiplash = true; }
             if (pB === 100) { scoreB += 1000; isQuiplash = true; }
-            
             scoreA += Math.floor((pA / 100) * baseScore);
             scoreB += Math.floor((pB / 100) * baseScore);
         }
@@ -849,12 +892,8 @@
         if(pl2) pl2.score += scoreB;
 
         const resPacket = {
-            type: 'VOTE_RESULT',
-            pA: pA, pB: pB,
-            scoreAddA: scoreA, scoreAddB: scoreB,
-            isQuiplash: isQuiplash,
-            nameA: pl1 ? pl1.name : "Unknown",
-            nameB: pl2 ? pl2.name : "Unknown"
+            type: 'VOTE_RESULT', pA, pB, scoreAddA: scoreA, scoreAddB: scoreB, isQuiplash,
+            nameA: pl1 ? pl1.name : "???", nameB: pl2 ? pl2.name : "???"
         };
         broadcast(resPacket);
         renderVoteResult(resPacket);
@@ -863,6 +902,50 @@
             currentBattleIndex++;
             startVotingPhase();
         }, 7000);
+    }
+
+    // FIX 1: Revised calculateFinalResults for 100% rounding
+    function calculateFinalResults() {
+        clearInterval(gameTimerInterval);
+        const voteCounts = {};
+        players.forEach(p => voteCounts[p.id] = 0);
+
+        Object.values(finalVotes).forEach(votedForId => {
+            if (voteCounts[votedForId] !== undefined) {
+                voteCounts[votedForId]++;
+            }
+        });
+
+        const totalVotes = Object.keys(finalVotes).length;
+        const results = [];
+        const baseScore = 3000;
+
+        // First pass: Calculate raw percentages (using Math.floor)
+        players.forEach(p => {
+            const pVotes = voteCounts[p.id] || 0;
+            const percentage = totalVotes > 0 ? Math.floor((pVotes / totalVotes) * 100) : 0;
+            const score = totalVotes > 0 ? Math.floor((pVotes / totalVotes) * baseScore) : 0;
+            p.score += score;
+            results.push({ playerId: p.id, votes: pVotes, percentage, score });
+        });
+
+        // Second pass: Adjust for rounding to ensure it equals exactly 100%
+        if (totalVotes > 0) {
+            let currentTotalPerc = results.reduce((sum, r) => sum + r.percentage, 0);
+            let diff = 100 - currentTotalPerc;
+            
+            if (diff !== 0) {
+                // Find the result with the most votes to adjust.
+                results.sort((a, b) => b.votes - a.votes);
+                results[0].percentage += diff;
+            }
+        }
+
+        const packet = { type: 'FINAL_VOTE_RESULT', results };
+        broadcast(packet);
+        renderFinalVoteResult(packet);
+        
+        setTimeout(showResults, 8000);
     }
 
     function showResults() {
@@ -881,17 +964,16 @@
         }
     }
 
+    // --- CLIENT SIDE ---
     function joinGame() {
         const btn = document.getElementById('btnJoin');
         
         const rawName = document.getElementById('playerNameInput').value.trim();
         if (!rawName) {
-            alert("You must enter a Name to join!");
-            return;
+            alert("You must enter a Name to join!"); return;
         }
 
         btn.disabled = true; btn.innerText = "SEARCHING...";
-        
         playerName = rawName.substring(0,10);
         const code = document.getElementById('roomCodeInput').value.toUpperCase();
         
@@ -910,10 +992,7 @@
             conn.on('close', () => alert("Host ended the game."));
             
             setTimeout(() => {
-                if(!conn.open) { 
-                    alert("Room not found!"); 
-                    btn.disabled = false; btn.innerText="JOIN GAME"; 
-                }
+                if(!conn.open) { alert("Room not found!"); btn.disabled = false; btn.innerText="JOIN GAME"; }
             }, 3000);
         });
     }
@@ -921,39 +1000,29 @@
     function handleClientData(data) {
         if(data.type === 'UPDATE_LOBBY') { players = data.players; renderLobby(); }
         else if (data.type === 'JOIN_REJECTED') {
-            alert(data.reason || "Join failed. The name might be taken.");
-            
-            if (conn) conn.close();
-            if (peer) peer.destroy();
-            
-            showScreen('screen-entry');
-            const btn = document.getElementById('btnJoin');
-            btn.disabled = false;
-            btn.innerText = "JOIN GAME";
+            alert(data.reason || "Join failed.");
+            location.reload();
         }
         else if (data.type === 'START_ROUND') handleClientStartRound(data.prompts, data.currentRound);
         else if (data.type === 'START_TIMER') {
-             if(data.phase === 'input') {
-                 runLocalTimer(data.duration, 'inputTimer', null, null);
-             }
+             if(data.phase === 'input') runLocalTimer(data.duration, 'inputTimer', null, null);
         }
         else if (data.type === 'FORCE_SUBMIT') forceSubmitLocal();
         else if (data.type === 'VOTE_PHASE') renderVoteScreen(data);
         else if (data.type === 'VOTE_RESULT') renderVoteResult(data);
+        else if (data.type === 'FINAL_VOTE_PHASE') renderFinalVoteScreen(data);
+        else if (data.type === 'FINAL_VOTE_RESULT') renderFinalVoteResult(data);
         else if (data.type === 'SHOW_SCORES') renderScoreboard(data);
     }
 
     function handleClientStartRound(prompts, roundNumber) {
         if (roundNumber) round = roundNumber;
-        
         myPrompts = prompts;
         currentPromptIndex = 0;
         myAnswers = {};
-
         const roundTag = document.getElementById('roundTag');
         roundTag.style.display = 'block';
         roundTag.textContent = round === 3 ? "FINAL ROUND" : "ROUND " + round;
-
         renderCurrentInput();
         showScreen('screen-input');
         document.getElementById('inputForm').style.display = 'block';
@@ -963,7 +1032,16 @@
     function renderCurrentInput() {
         const p = myPrompts[currentPromptIndex];
         setSafeText('inputRoundTitle', round === 3 ? "FINAL ROUND" : `ROUND ${round}`);
-        setSafeText('promptCounter', `PROMPT ${currentPromptIndex + 1}/${myPrompts.length}`);
+        const finalNotice = document.getElementById('finalRoundNotice');
+        const counter = document.getElementById('promptCounter');
+        if (round === 3) {
+            finalNotice.style.display = 'block';
+            counter.style.display = 'none';
+        } else {
+            finalNotice.style.display = 'none';
+            counter.style.display = 'inline-block';
+            setSafeText('promptCounter', `PROMPT ${currentPromptIndex + 1}/${myPrompts.length}`);
+        }
         setSafeText('inputPromptText', p.text);
         document.getElementById('answerInput').value = "";
         document.getElementById('answerInput').focus();
@@ -971,9 +1049,7 @@
 
     function submitCurrentAnswer(btn) {
         let txt = document.getElementById('answerInput').value.trim();
-        
         if (txt === "") txt = getSafetyQuip();
-
         const p = myPrompts[currentPromptIndex];
         myAnswers[p.battleIndex] = txt;
         
@@ -985,20 +1061,8 @@
             document.getElementById('inputForm').style.display = 'none';
             document.getElementById('inputWaitMsg').style.display = 'block';
             
-            if (isHost) {
-                const entries = myAnswers;
-                for (let bIndex in entries) {
-                    const battle = battles[bIndex];
-                    if (battle) {
-                        let val = entries[bIndex];
-                        if (battle.p1Id === myId) battle.a1 = val;
-                        if (battle.p2Id === myId) battle.a2 = val;
-                    }
-                }
-                checkAllAnswersReceived();
-            } else {
-                conn.send({ type: 'SUBMIT_ANSWERS', answers: myAnswers });
-            }
+            const connObj = isHost ? { send: (data) => processPlayerAnswers(myId, data.answers) } : conn;
+            connObj.send({ type: 'SUBMIT_ANSWERS', answers: myAnswers });
         }
     }
 
@@ -1012,7 +1076,6 @@
 
     function renderVoteScreen(data) {
         showScreen('screen-vote');
-        
         setSafeText('votePromptText', data.prompt);
         setSafeText('textVoteA', data.a1);
         setSafeText('textVoteB', data.a2);
@@ -1022,6 +1085,8 @@
         [btnA, btnB].forEach(b => {
             b.classList.remove('dimmed', 'winner', 'selected');
             b.style.pointerEvents = 'auto';
+            // Restore innerHTML structure safely
+            b.innerHTML = `<span id="${b.id.replace('btn','text')}">${b.innerText}</span><div class="vote-perc" id="${b.id.replace('btnVote','perc')}">0%</div>`
         });
 
         document.getElementById('percA').style.transform = 'scale(0)';
@@ -1029,87 +1094,146 @@
         document.getElementById('quiplashBanner').classList.remove('visible-quiplash');
 
         const imFighter = (myId === data.p1Id || myId === data.p2Id);
-        
         if (imFighter) {
             setSafeText('voteStatus', "YOU'RE IN! (DON'T VOTE)");
-            btnA.style.pointerEvents = 'none';
-            btnB.style.pointerEvents = 'none';
-            btnA.classList.add('dimmed');
-            btnB.classList.add('dimmed');
+            [btnA, btnB].forEach(b => { b.style.pointerEvents = 'none'; b.classList.add('dimmed'); });
         } else {
             setSafeText('voteStatus', "TAP THE BEST ONE!");
         }
-
         runLocalTimer(data.duration, 'voteTimerText', 'voteTimerBar', null);
     }
 
+    function renderFinalVoteScreen(data) {
+        showScreen('screen-final-vote');
+        setSafeText('finalVotePromptText', data.prompt);
+        setSafeText('finalVoteStatus', "VOTE FOR YOUR FAVORITE!");
+        
+        const list = document.getElementById('finalVoteList');
+        list.innerHTML = '';
+        data.answers.forEach(ans => {
+            const btn = document.createElement('div');
+            btn.className = 'answer-btn';
+            btn.dataset.playerId = ans.playerId;
+
+            const isMine = ans.playerId === myId;
+            if(isMine) {
+                btn.classList.add('dimmed');
+            } else {
+                btn.onclick = () => castFinalVote(ans.playerId);
+            }
+            
+            btn.innerHTML = `
+                <span>${ans.answer}</span>
+                <div class="vote-perc">0%</div>
+            `;
+            list.appendChild(btn);
+        });
+
+        runLocalTimer(data.duration, 'finalVoteTimerText', 'finalVoteTimerBar', null);
+    }
+    
     function castVote(choice) {
         const btnA = document.getElementById('btnVoteA');
         const btnB = document.getElementById('btnVoteB');
-        
-        if (choice === 0) {
-            btnA.classList.add('selected');
-            btnB.classList.add('dimmed');
-        } else {
-            btnB.classList.add('selected');
-            btnA.classList.add('dimmed');
-        }
-        btnA.style.pointerEvents = 'none';
-        btnB.style.pointerEvents = 'none';
+        if (choice === 0) { btnA.classList.add('selected'); btnB.classList.add('dimmed'); }
+        else { btnB.classList.add('selected'); btnA.classList.add('dimmed'); }
+        btnA.style.pointerEvents = 'none'; btnB.style.pointerEvents = 'none';
         setSafeText('voteStatus', "VOTE LOCKED!");
 
-        if (isHost) {
-            const b = battles[currentBattleIndex];
-            if(choice === 0) b.votesA++; else b.votesB++;
-            
-            checkAllVotesReceived();
-        } else {
-            conn.send({ type: 'VOTE', choice: choice });
-        }
+        const connObj = isHost ? { send: (data) => handleHostData(myId, data) } : conn;
+        connObj.send({ type: 'VOTE', choice });
+    }
+
+    function castFinalVote(votedForId) {
+        setSafeText('finalVoteStatus', "VOTE LOCKED!");
+        document.querySelectorAll('#finalVoteList .answer-btn').forEach(btn => {
+            btn.onclick = null; // remove onclick
+            if (btn.dataset.playerId === votedForId) {
+                btn.classList.add('selected');
+            } else {
+                btn.classList.add('dimmed');
+            }
+        });
+
+        const connObj = isHost ? { send: (data) => handleHostData(myId, data) } : conn;
+        connObj.send({ type: 'FINAL_VOTE', votedForId });
     }
 
     function renderVoteResult(data) {
         setSafeText('voteStatus', "RESULTS!");
         clearInterval(gameTimerInterval);
         
-        const pA = document.getElementById('percA');
-        const pB = document.getElementById('percB');
-        
-        setSafeText('textVoteA', `"${document.getElementById('textVoteA').innerText}"`);
-        document.getElementById('textVoteA').innerHTML += `<br><span style="font-size:1rem; color:#666; margin-top:5px; display:block;">— ${data.nameA}</span>`;
-        
-        document.getElementById('textVoteB').innerHTML += `<br><span style="font-size:1rem; color:#666; margin-top:5px; display:block;">— ${data.nameB}</span>`;
+        const btnA = document.getElementById('btnVoteA'), pA = document.getElementById('percA');
+        const btnB = document.getElementById('btnVoteB'), pB = document.getElementById('percB');
+        const textA = document.getElementById('textVoteA');
+        const textB = document.getElementById('textVoteB');
 
-        pA.style.transform = 'scale(1)';
-        pB.style.transform = 'scale(1)';
-        animateValue(pA, 0, data.pA, 1000);
-        animateValue(pB, 0, data.pB, 1000);
+        // Preserve original inner text while appending the name
+        textA.textContent = `"${textA.textContent}"`;
+        textA.innerHTML += `<br><span style="font-size:1rem; color:#666; margin-top:5px; display:block;">— ${data.nameA}</span>`;
+        textB.textContent = `"${textB.textContent}"`;
+        textB.innerHTML += `<br><span style="font-size:1rem; color:#666; margin-top:5px; display:block;">— ${data.nameB}</span>`;
+
+        pA.style.transform = 'scale(1)'; pB.style.transform = 'scale(1)';
+        animateValue(pA, 0, data.pA, 1000); animateValue(pB, 0, data.pB, 1000);
 
         setTimeout(() => {
-            if (data.pA > data.pB) document.getElementById('btnVoteA').classList.add('winner');
-            else if (data.pB > data.pA) document.getElementById('btnVoteB').classList.add('winner');
-            else if (data.pA === data.pB && data.pA > 0) { }
-
+            if (data.pA > data.pB) btnA.classList.add('winner');
+            else if (data.pB > data.pA) btnB.classList.add('winner');
+            
             if (data.isQuiplash) {
-                const banner = document.getElementById('quiplashBanner');
-                banner.classList.add('visible-quiplash');
+                document.getElementById('quiplashBanner').classList.add('visible-quiplash');
                 confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
-                
-                setTimeout(() => {
-                    banner.classList.remove('visible-quiplash');
-                }, 3000);
+                setTimeout(() => document.getElementById('quiplashBanner').classList.remove('visible-quiplash'), 3000);
             }
         }, 1200);
     }
+    
+    // FIX 2 & 3: Revised renderFinalVoteResult to append name safely and ensure animation starts
+    function renderFinalVoteResult(data) {
+        clearInterval(gameTimerInterval);
+        setSafeText('finalVoteStatus', "RESULTS!");
 
+        let topScore = 0;
+        data.results.forEach(r => { if(r.score > topScore) topScore = r.score; });
+
+        document.querySelectorAll('#finalVoteList .answer-btn').forEach(btn => {
+            const result = data.results.find(r => r.playerId === btn.dataset.playerId);
+            if (result) {
+                const percDiv = btn.querySelector('.vote-perc');
+                if (percDiv) {
+                    percDiv.style.transform = 'scale(1)';
+                    animateValue(percDiv, 0, result.percentage, 1000);
+                }
+                
+                const pInfo = players.find(p => p.id === result.playerId);
+                if (pInfo) {
+                    // Create and append a name span instead of overwriting innerHTML
+                    const nameSpan = document.createElement('span');
+                    nameSpan.style.cssText = "font-size:1rem; color:#666; margin-top:5px; display:block;";
+                    nameSpan.textContent = `— ${pInfo.name}`;
+                    btn.appendChild(nameSpan);
+                }
+
+                if (result.score > 0 && result.score === topScore) {
+                    setTimeout(() => btn.classList.add('winner'), 1200);
+                }
+            }
+        });
+    }
+
+    // FIX 2: Revised animateValue to use textContent and ensure correct end value.
     function animateValue(obj, start, end, duration) {
         let startTimestamp = null;
         const step = (timestamp) => {
             if (!startTimestamp) startTimestamp = timestamp;
             const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-            obj.innerHTML = Math.floor(progress * (end - start) + start) + "%";
+            const current = Math.floor(progress * (end - start) + start);
+            obj.textContent = current + "%";
             if (progress < 1) {
                 window.requestAnimationFrame(step);
+            } else {
+                obj.textContent = end + "%"; // Ensure it lands exactly on the end number
             }
         };
         window.requestAnimationFrame(step);
@@ -1118,38 +1242,18 @@
     function renderScoreboard(data) {
         showScreen('screen-results');
         clearInterval(gameTimerInterval);
-        
         document.getElementById('quiplashBanner').classList.remove('visible-quiplash');
-
         const list = document.getElementById('scoreboardList');
         list.innerHTML = '';
-        
         setSafeText('scoreTitle', data.isFinal ? "GAME OVER" : "STANDINGS");
-        if(data.isFinal) confetti({ particleCount: 300, spread: 100 });
+        if(data.isFinal) confetti({ particleCount: 300, spread: 100, origin: { y: 0.2 } });
 
         data.players.forEach((p, i) => {
             const row = document.createElement('div');
-            let bg = "#f0f0f0";
-            let border = "#ccc";
-            if (i===0) { bg = "#ffd700"; border="#b8860b"; }
-            if (i===1) { bg = "#c0c0c0"; border="#7f7f7f"; }
-            if (i===2) { bg = "#cd7f32"; border="#8b4513"; }
-
-            row.style.cssText = `
-                background: ${bg}; border: 3px solid ${border};
-                margin-bottom: 10px; padding: 15px; border-radius: 10px;
-                display: flex; justify-content: space-between; align-items: center;
-                font-family: var(--font-sub); font-size: 1.5rem;
-                box-shadow: 5px 5px 0 rgba(0,0,0,0.1);
-            `;
-            
-            row.innerHTML = `
-                <div style="display:flex; align-items:center;">
-                    <div style="font-size:2rem; width:40px; text-align:center; margin-right:10px;">${i+1}</div>
-                    <div>${p.name}</div>
-                </div>
-                <div>${p.score}</div>
-            `;
+            let bg = i === 0 ? "#ffd700" : i === 1 ? "#c0c0c0" : i === 2 ? "#cd7f32" : "#f0f0f0";
+            let border = i === 0 ? "#b8860b" : i === 1 ? "#7f7f7f" : i === 2 ? "#8b4513" : "#ccc";
+            row.style.cssText = `background:${bg}; border:3px solid ${border}; margin-bottom:10px; padding:15px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; font-family:var(--font-sub); font-size:1.5rem; box-shadow:5px 5px 0 rgba(0,0,0,0.1);`;
+            row.innerHTML = `<div style="display:flex;align-items:center;"><div style="font-size:2rem;width:40px;text-align:center;margin-right:10px;">${i+1}</div><div>${p.name}</div></div><div>${p.score}</div>`;
             list.appendChild(row);
         });
 
