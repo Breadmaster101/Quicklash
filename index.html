@@ -239,10 +239,32 @@
         
         .visible-quiplash { transform: translate(-50%, -50%) scale(1) rotate(-5deg) !important; }
 
-        .timer-container { width: 100%; height: 20px; background: #000; border-radius: 10px; margin-top: 15px; border: 2px solid white; overflow: hidden; }
+        .timer-container { width: 100%; height: 30px; background: #000; border-radius: 15px; margin-top: 15px; border: 3px solid white; overflow: hidden; position: relative; }
         .timer-bar { height: 100%; width: 100%; background: var(--accent-pink); transform-origin: left; }
+        .timer-text { position: absolute; top:0; left:0; width:100%; height:100%; text-align: center; color: white; font-weight: bold; line-height: 24px; font-family: var(--font-sub); letter-spacing: 1px;}
+
+        .timer-float {
+            position: absolute;
+            top: -20px;
+            right: -20px;
+            width: 70px; height: 70px;
+            background: var(--accent-pink);
+            border: 4px solid #fff;
+            outline: 3px solid #000;
+            border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+            color: white;
+            font-family: var(--font-head);
+            font-size: 2.2rem;
+            text-shadow: 2px 2px 0 #000;
+            z-index: 50;
+            box-shadow: 5px 5px 0 #000;
+            animation: bounceIn 0.5s;
+        }
+        .timer-float.urgent { background: #ff0000; animation: pulse 0.5s infinite; }
 
         @keyframes pulse { 0% { transform: scale(1.05); } 50% { transform: scale(1.08); } 100% { transform: scale(1.05); } }
+        @keyframes bounceIn { 0% { transform: scale(0); } 70% { transform: scale(1.1); } 100% { transform: scale(1); } }
         @keyframes float { 0% { transform: translateY(0); } 50% { transform: translateY(-10px); } 100% { transform: translateY(0); } }
 
         .top-bar {
@@ -286,7 +308,7 @@
     <div id="screen-lobby" class="screen">
         <div class="card-container" style="max-width:800px;">
             <p style="font-family:var(--font-sub); font-size:1.5rem; margin:0;">ROOM CODE</p>
-            <h1 id="lobbyRoomCode" style="font-size:5rem; color:#000; -webkit-text-stroke:0;">????</h1>
+            <h1 id="lobbyRoomCode" style="font-size:6rem; color:var(--bg-color); -webkit-text-stroke:0; letter-spacing: 20px; font-family: var(--font-sub); margin-top: 10px;">????</h1>
             
             <div style="border-top:3px dashed #ccc; margin: 20px 0;"></div>
             
@@ -303,6 +325,8 @@
         <h2 id="inputRoundTitle" style="font-size:3rem; color:#fff; -webkit-text-stroke:2px black;">ROUND 1</h2>
         
         <div class="card-container" id="inputForm">
+            <div id="inputTimer" class="timer-float">90</div>
+            
             <div class="info-tag" style="background:var(--accent-orange); border:none; color:black; display:inline-block; margin-bottom:10px;" id="promptCounter">PROMPT 1/2</div>
             <p id="inputPromptText" style="font-size: 1.8rem; font-weight:bold; margin: 10px 0 20px 0;">...</p>
             
@@ -341,7 +365,10 @@
             
             <h2 id="voteStatus" style="font-size:1.5rem; color:#fff; background:black; display:inline-block; align-self:center; padding:5px 10px; transform:rotate(-2deg);">VOTE NOW!</h2>
             
-            <div class="timer-container"><div class="timer-bar" id="voteTimer"></div></div>
+            <div class="timer-container">
+                <div class="timer-bar" id="voteTimerBar"></div>
+                <div class="timer-text" id="voteTimerText">20s</div>
+            </div>
         </div>
     </div>
 
@@ -358,6 +385,9 @@
 </div>
 
 <script>
+    const INPUT_TIME_LIMIT = 90;
+    const VOTE_TIME_LIMIT = 20;
+
     const PROMPTS = [
         "A rejected name for a Crayola crayon.",
         "What the Queen keeps in her purse.",
@@ -375,7 +405,75 @@
         "Why the chicken actually crossed the road.",
         "A superpower that is actually super inconvenient.",
         "The worst thing to whisper in a library.",
-        "What the Mona Lisa is smiling about."
+        "What the Mona Lisa is smiling about.",
+        "The worst thing to find in your burrito.",
+        "A bad name for a racehorse.",
+        "What you don't want to hear from the pilot.",
+        "A slogan for a funeral home.",
+        "The unsexiest feature a person can have.",
+        "A rejected title for 'Star Wars'.",
+        "What really happens at Area 51.",
+        "A terrible gift for a baby shower.",
+        "The worst person to be stuck in an elevator with.",
+        "A catchy name for a venereal disease.",
+        "What you shouldn't say during a job interview.",
+        "The title of a YouTube video with 0 views.",
+        "A weird thing to frame and hang on the wall.",
+        "The worst magic spell: 'Harry Potter and the...'",
+        "Something you shouldn't do while naked.",
+        "A rejected shape for a Chicken McNugget.",
+        "The real reason the Titanic sank.",
+        "What God said when he created the platypus.",
+        "A bad substitute for toilet paper.",
+        "The worst thing to say when proposing.",
+        "An ingredient in a witch's 'budget' potion.",
+        "What you'd find in a minimalist's trash can.",
+        "A reason to call 911 that isn't an emergency.",
+        "The worst tattoo to get on your face.",
+        "A book that should be banned for being too boring.",
+        "What squirrels talk about.",
+        "A bad name for a pirate ship.",
+        "The worst thing to slip on.",
+        "Something that sounds dirty but isn't.",
+        "A rejected Transformer name.",
+        "The worst way to quit your job.",
+        "What vampires use instead of sunscreen.",
+        "A terrible catchphrase for a superhero.",
+        "The grossest smoothie combination.",
+        "What statues think about all day.",
+        "A rejected Olympic sport.",
+        "The worst thing to hear in a public restroom.",
+        "A headline you'd see in Florida.",
+        "What you shouldn't put in the microwave.",
+        "The name of a cologne for gamers.",
+        "A bad place to take a nap.",
+        "What dogs actually smell when they sniff butts.",
+        "The worst password you could have.",
+        "Something you shouldn't say to a police officer.",
+        "A rejected Monopoly token.",
+        "The worst flavor of toothpaste.",
+        "What you'd find in the pockets of a zombie.",
+        "A sign you're at a bad restaurant.",
+        "The worst lullaby lyric.",
+        "Something you shouldn't use as a weapon.",
+        "A bad name for a strip club.",
+        "What aliens really want from Earth.",
+        "A rejected character from Sesame Street.",
+        "The worst thing to yell at a wedding.",
+        "What makes a man instantly unattractive.",
+        "A weird thing to be allergic to.",
+        "The worst prize in a cereal box.",
+        "A text you shouldn't send to your mom.",
+        "The name of a law firm you shouldn't trust.",
+        "What you shouldn't do in a haunted house.",
+        "A bad excuse for being late.",
+        "The worst thing to catch while fishing.",
+        "A weird thing to collect.",
+        "What Santa does on December 26th.",
+        "A rejected emoji.",
+        "The worst advice you've ever received.",
+        "A bad slogan for a gym.",
+        "What fish think about."
     ];
 
     const SAFETY_QUIPS = [
@@ -400,9 +498,13 @@
     let battles = []; 
     let currentBattleIndex = 0;
     
+    let availablePrompts = [];
+    
     let myPrompts = [];
     let currentPromptIndex = 0;
     let myAnswers = {}; 
+
+    let gameTimerInterval = null;
 
     const generateCode = () => {
         const c = "ABCDEFGHJKLMNPQRSTUVWXYZ"; 
@@ -424,6 +526,40 @@
 
     const broadcast = (data) => Object.values(connections).forEach(c => c.send(data));
 
+    function runLocalTimer(duration, displayId, barId, onComplete) {
+        clearInterval(gameTimerInterval);
+        let timeLeft = duration;
+        
+        const displayEl = document.getElementById(displayId);
+        const barEl = barId ? document.getElementById(barId) : null;
+        
+        if(displayEl) {
+            displayEl.textContent = timeLeft;
+            displayEl.classList.remove('urgent');
+        }
+        if(barEl) {
+            barEl.style.transition = 'none';
+            barEl.style.width = '100%';
+            void barEl.offsetWidth;
+            barEl.style.transition = `width ${duration}s linear`;
+            barEl.style.width = '0%';
+        }
+
+        gameTimerInterval = setInterval(() => {
+            timeLeft--;
+            if(displayEl) {
+                displayEl.textContent = timeLeft;
+                if(barId) displayEl.textContent += 's';
+                if (timeLeft <= 10) displayEl.classList.add('urgent');
+            }
+
+            if (timeLeft <= 0) {
+                clearInterval(gameTimerInterval);
+                if (onComplete) onComplete();
+            }
+        }, 1000);
+    }
+
     function startHost() {
         const btn = document.getElementById('btnHost');
         
@@ -437,6 +573,8 @@
         
         playerName = rawName.substring(0,10).toUpperCase();
         const code = generateCode();
+
+        availablePrompts = [...PROMPTS];
 
         peer = new Peer("ql-" + code, { debug: 1 });
         
@@ -476,6 +614,19 @@
     function handleHostData(pid, data) {
         if (data.type === 'JOIN') {
             const name = (data.name || "Anon").substring(0,12).toUpperCase();
+            
+            // Check for duplicate name
+            const isNameTaken = players.some(p => p.name.toUpperCase() === name.toUpperCase());
+            if (isNameTaken) {
+                const connToReject = connections[pid];
+                if (connToReject) {
+                    connToReject.send({ type: 'JOIN_REJECTED', reason: 'That name is already taken!' });
+                    // Give the message time to send before closing
+                    setTimeout(() => connToReject.close(), 500);
+                }
+                return; // Stop processing
+            }
+
             if(!players.find(p=>p.id === pid)) {
                 players.push({ id: pid, name, score: 0 });
                 renderLobby();
@@ -501,6 +652,8 @@
             if (b) {
                 if (data.choice === 0) b.votesA++;
                 else b.votesB++;
+
+                checkAllVotesReceived();
             }
         }
     }
@@ -540,15 +693,22 @@
 
     function startRound() {
         battles = [];
-        document.getElementById('roundTag').style.display = 'block';
-        document.getElementById('roundTag').textContent = round === 3 ? "FINAL ROUND" : "ROUND " + round;
+        const roundTag = document.getElementById('roundTag');
+        roundTag.style.display = 'block';
+        roundTag.textContent = round === 3 ? "FINAL ROUND" : "ROUND " + round;
 
         const count = players.length;
         const shuffledPlayers = [...players].sort(()=>0.5-Math.random());
-        const shuffledPrompts = [...PROMPTS].sort(()=>0.5-Math.random());
+        
+        availablePrompts.sort(()=>0.5-Math.random());
+
+        if (availablePrompts.length < count) {
+             availablePrompts = [...PROMPTS].sort(()=>0.5-Math.random());
+        }
 
         if (round === 3) {
-            const finalPrompt = shuffledPrompts[0];
+            const finalPrompt = availablePrompts.pop() || "Prompt shortage!";
+            
             for(let i=0; i<count; i++) {
                 let p1 = shuffledPlayers[i];
                 let p2 = shuffledPlayers[(i+1)%count];
@@ -564,7 +724,9 @@
             for(let i=0; i<count; i++) {
                 let p1 = shuffledPlayers[i];
                 let p2 = shuffledPlayers[(i+1)%count];
-                let prompt = shuffledPrompts[i] || "Prompt shortage!";
+                
+                let prompt = availablePrompts.pop() || "Prompt shortage!";
+                
                 battles.push({
                     id: i, prompt: prompt,
                     p1Id: p1.id, p2Id: p2.id,
@@ -578,18 +740,55 @@
             const pBattles = battles.filter(b => b.p1Id === p.id || b.p2Id === p.id);
             const promptData = pBattles.map(b => ({ battleIndex: b.id, text: b.prompt }));
             
-            if(p.id === 'host') handleClientStartRound(promptData);
-            else connections[p.id].send({ type: 'START_ROUND', prompts: promptData });
+            if(p.id === 'host') handleClientStartRound(promptData, round);
+            else connections[p.id].send({ type: 'START_ROUND', prompts: promptData, currentRound: round });
+        });
+
+        broadcast({ type: 'START_TIMER', duration: INPUT_TIME_LIMIT, phase: 'input' });
+        
+        runLocalTimer(INPUT_TIME_LIMIT, 'inputTimer', null, () => {
+           handleInputTimeout(); 
         });
 
         if(isHost) showScreen('screen-input');
     }
 
+    function handleInputTimeout() {
+        if(isHost) {
+            forceSubmitLocal();
+            broadcast({ type: 'FORCE_SUBMIT' });
+            
+            setTimeout(() => {
+                battles.forEach(b => {
+                    if (!b.a1) b.a1 = getSafetyQuip();
+                    if (!b.a2) b.a2 = getSafetyQuip();
+                });
+                currentBattleIndex = 0;
+                startVotingPhase();
+            }, 2000);
+        }
+    }
+
     function checkAllAnswersReceived() {
         const allAnswered = battles.every(b => b.a1 && b.a2);
         if(allAnswered) {
+            clearInterval(gameTimerInterval);
             currentBattleIndex = 0;
-            setTimeout(startVotingPhase, 1000);
+            setTimeout(startVotingPhase, 500);
+        }
+    }
+    
+    function checkAllVotesReceived() {
+        const b = battles[currentBattleIndex];
+        if (!b) return;
+
+        const expectedVotes = Math.max(1, players.length - 2); 
+        
+        const currentVotes = b.votesA + b.votesB;
+
+        if (currentVotes >= expectedVotes) {
+            clearInterval(gameTimerInterval);
+            calculateBattleResults();
         }
     }
 
@@ -606,26 +805,21 @@
             type: 'VOTE_PHASE',
             prompt: b.prompt,
             a1: b.a1, a2: b.a2,
-            p1Id: b.p1Id, p2Id: b.p2Id
+            p1Id: b.p1Id, p2Id: b.p2Id,
+            duration: VOTE_TIME_LIMIT
         };
         
         broadcast(packet);
         renderVoteScreen(packet);
 
-        let voteTime = 15000;
-        
-        const timer = document.getElementById('voteTimer');
-        timer.style.transition = 'none';
-        timer.style.width = '100%';
-        setTimeout(() => {
-            timer.style.transition = `width ${voteTime}ms linear`;
-            timer.style.width = '0%';
-        }, 100);
-
-        setTimeout(calculateBattleResults, voteTime + 1000);
+        runLocalTimer(VOTE_TIME_LIMIT, 'voteTimerText', 'voteTimerBar', () => {
+             calculateBattleResults();
+        });
     }
 
     function calculateBattleResults() {
+        clearInterval(gameTimerInterval); 
+        
         const b = battles[currentBattleIndex];
         const total = b.votesA + b.votesB;
         let pA = 0, pB = 0;
@@ -726,16 +920,40 @@
 
     function handleClientData(data) {
         if(data.type === 'UPDATE_LOBBY') { players = data.players; renderLobby(); }
-        else if (data.type === 'START_ROUND') handleClientStartRound(data.prompts);
+        else if (data.type === 'JOIN_REJECTED') {
+            alert(data.reason || "Join failed. The name might be taken.");
+            
+            if (conn) conn.close();
+            if (peer) peer.destroy();
+            
+            showScreen('screen-entry');
+            const btn = document.getElementById('btnJoin');
+            btn.disabled = false;
+            btn.innerText = "JOIN GAME";
+        }
+        else if (data.type === 'START_ROUND') handleClientStartRound(data.prompts, data.currentRound);
+        else if (data.type === 'START_TIMER') {
+             if(data.phase === 'input') {
+                 runLocalTimer(data.duration, 'inputTimer', null, null);
+             }
+        }
+        else if (data.type === 'FORCE_SUBMIT') forceSubmitLocal();
         else if (data.type === 'VOTE_PHASE') renderVoteScreen(data);
         else if (data.type === 'VOTE_RESULT') renderVoteResult(data);
         else if (data.type === 'SHOW_SCORES') renderScoreboard(data);
     }
 
-    function handleClientStartRound(prompts) {
+    function handleClientStartRound(prompts, roundNumber) {
+        if (roundNumber) round = roundNumber;
+        
         myPrompts = prompts;
         currentPromptIndex = 0;
         myAnswers = {};
+
+        const roundTag = document.getElementById('roundTag');
+        roundTag.style.display = 'block';
+        roundTag.textContent = round === 3 ? "FINAL ROUND" : "ROUND " + round;
+
         renderCurrentInput();
         showScreen('screen-input');
         document.getElementById('inputForm').style.display = 'block';
@@ -754,10 +972,7 @@
     function submitCurrentAnswer(btn) {
         let txt = document.getElementById('answerInput').value.trim();
         
-        if (txt === "") {
-            alert("You can't submit nothing! Write something funny.");
-            return;
-        }
+        if (txt === "") txt = getSafetyQuip();
 
         const p = myPrompts[currentPromptIndex];
         myAnswers[p.battleIndex] = txt;
@@ -766,6 +981,7 @@
         if(currentPromptIndex < myPrompts.length) {
             renderCurrentInput();
         } else {
+            clearInterval(gameTimerInterval);
             document.getElementById('inputForm').style.display = 'none';
             document.getElementById('inputWaitMsg').style.display = 'block';
             
@@ -775,7 +991,6 @@
                     const battle = battles[bIndex];
                     if (battle) {
                         let val = entries[bIndex];
-                        if(!val || val.trim() === "") val = getSafetyQuip();
                         if (battle.p1Id === myId) battle.a1 = val;
                         if (battle.p2Id === myId) battle.a2 = val;
                     }
@@ -783,6 +998,14 @@
                 checkAllAnswersReceived();
             } else {
                 conn.send({ type: 'SUBMIT_ANSWERS', answers: myAnswers });
+            }
+        }
+    }
+
+    function forceSubmitLocal() {
+        if (document.getElementById('inputForm').style.display !== 'none') {
+            while(currentPromptIndex < myPrompts.length) {
+                submitCurrentAnswer(null);
             }
         }
     }
@@ -815,14 +1038,9 @@
             btnB.classList.add('dimmed');
         } else {
             setSafeText('voteStatus', "TAP THE BEST ONE!");
-            const timer = document.getElementById('voteTimer');
-            timer.style.transition = 'none';
-            timer.style.width = '100%';
-            setTimeout(() => {
-                timer.style.transition = `width 15s linear`;
-                timer.style.width = '0%';
-            }, 50);
         }
+
+        runLocalTimer(data.duration, 'voteTimerText', 'voteTimerBar', null);
     }
 
     function castVote(choice) {
@@ -843,6 +1061,8 @@
         if (isHost) {
             const b = battles[currentBattleIndex];
             if(choice === 0) b.votesA++; else b.votesB++;
+            
+            checkAllVotesReceived();
         } else {
             conn.send({ type: 'VOTE', choice: choice });
         }
@@ -850,6 +1070,7 @@
 
     function renderVoteResult(data) {
         setSafeText('voteStatus', "RESULTS!");
+        clearInterval(gameTimerInterval);
         
         const pA = document.getElementById('percA');
         const pB = document.getElementById('percB');
@@ -896,6 +1117,7 @@
 
     function renderScoreboard(data) {
         showScreen('screen-results');
+        clearInterval(gameTimerInterval);
         
         document.getElementById('quiplashBanner').classList.remove('visible-quiplash');
 
