@@ -1,10 +1,15 @@
+<!-- START OF FILE index.html -->
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quicklash: The Party Game</title>
+    <!-- PeerJS for WebRTC -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- Socket.IO for WebSockets -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Luckiest+Guy&family=Roboto+Condensed:wght@700&display=swap" rel="stylesheet">
 
@@ -271,13 +276,16 @@
 
         .top-bar {
             position: absolute; top: 10px; left: 0; width: 100%;
-            display: flex; justify-content: space-between; padding: 0 20px;
-            pointer-events: none;
+            display: flex; justify-content: space-between; align-items: flex-start;
+            padding: 0 20px;
+            pointer-events: none; /* Let clicks pass through, children need auto */
+            z-index: 50;
         }
         .info-tag {
             background: #000; color: #fff; padding: 5px 15px;
             border-radius: 20px; font-family: var(--font-body); font-weight: bold;
             border: 2px solid var(--accent-green);
+            pointer-events: auto;
         }
 
         #finalVoteList {
@@ -292,6 +300,65 @@
                 grid-template-columns: 1fr 1fr;
             }
         }
+
+        /* Improved Top-Right Toggle Switch */
+        #connectionModeContainer {
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            background: #fff;
+            border: 3px solid #000;
+            border-radius: 30px;
+            padding: 5px 10px;
+            gap: 8px;
+            box-shadow: 3px 3px 0 rgba(0,0,0,0.3);
+            /* Zoom effect removed */
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 28px;
+        }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: var(--accent-orange);
+            transition: .4s;
+            border: 2px solid #000;
+            border-radius: 34px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            /* Centering fix: use top 50% and negative Y translate */
+            top: 50%;
+            transform: translateY(-50%);
+            
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+            border: 2px solid #000;
+        }
+        input:checked + .slider { background-color: var(--accent-green); }
+        input:checked + .slider:before { 
+            /* Maintain Y centering while translating X */
+            transform: translate(20px, -50%); 
+        }
+        
+        .toggle-label { 
+            font-family: var(--font-body); 
+            font-weight: bold; 
+            font-size: 0.9rem;
+            color: #000;
+        }
+
     </style>
 </head>
 <body>
@@ -300,8 +367,30 @@
 
 <div id="app">
     <div class="top-bar">
+        <!-- Top Left -->
         <div class="info-tag" id="roleTag">Spectator</div>
-        <div class="info-tag" id="roundTag" style="display:none">ROUND 1</div>
+        
+        <!-- Top Right -->
+        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 5px;">
+            <!-- Connection Toggle (Visible only at start) -->
+            <div id="connectionModeContainer">
+                 <span class="toggle-label">P2P</span>
+                 <label class="switch">
+                    <!-- Added onchange handler -->
+                    <input type="checkbox" id="socketToggle" onchange="toggleServerNote()">
+                    <span class="slider"></span>
+                 </label>
+                 <span class="toggle-label">SERVER</span>
+            </div>
+            
+            <!-- Added Note: Hidden by default, toggled by JS -->
+            <div id="serverNote" style="display:none; pointer-events: auto; font-family: var(--font-body); font-size: 0.8rem; background: #ffffcc; border: 2px solid #000; padding: 5px; border-radius: 10px; text-align: center; max-width: 180px; box-shadow: 2px 2px 0 rgba(0,0,0,0.2);">
+                ⚠️ <b>Note:</b> Server may take ~1 min to wake up.
+            </div>
+
+            <!-- Round Info (Visible during game) -->
+            <div class="info-tag" id="roundTag" style="display:none">ROUND 1</div>
+        </div>
     </div>
 
     <div id="screen-entry" class="screen active">
@@ -418,6 +507,7 @@
 <script>
     const INPUT_TIME_LIMIT = 90;
     const VOTE_TIME_LIMIT = 20;
+    const SOCKET_SERVER_URL = "https://quicklash-server.onrender.com";
 
     const PROMPTS = [
         "A rejected name for a Crayola crayon.",
@@ -518,12 +608,16 @@
         "I'm not funny."
     ];
 
-    let peer, conn;
-    let connections = {};
+    let peer, conn, socket;
+    let connections = {}; // For PeerJS
     let myId = null;
     let isHost = false;
     let playerName = "";
     
+    // Toggle for WebRTC vs WebSocket
+    let useSocket = false;
+    let roomCode = "";
+
     let players = []; 
     let round = 1; 
     let battles = []; 
@@ -540,6 +634,13 @@
     let myAnswers = {}; 
 
     let gameTimerInterval = null;
+
+    // --- NEW FUNCTION TO TOGGLE NOTE ---
+    function toggleServerNote() {
+        const chk = document.getElementById('socketToggle');
+        const note = document.getElementById('serverNote');
+        note.style.display = chk.checked ? 'block' : 'none';
+    }
 
     const generateCode = () => {
         const c = "ABCDEFGHJKLMNPQRSTUVWXYZ"; 
@@ -558,8 +659,39 @@
         const el = document.getElementById(id);
         if(el) el.textContent = txt;
     };
+    
+    const hideConnectionToggle = () => {
+        document.getElementById('connectionModeContainer').style.display = 'none';
+        document.getElementById('serverNote').style.display = 'none'; // Also hide the note
+    };
 
-    const broadcast = (data) => Object.values(connections).forEach(c => c.send(data));
+    // --- NETWORKING ABSTRACTION ---
+    
+    const broadcast = (data) => {
+        if (useSocket) {
+            socket.emit('host_broadcast', { roomCode, data });
+        } else {
+            Object.values(connections).forEach(c => c.send(data));
+        }
+    };
+
+    const sendToClient = (targetId, data) => {
+        if (useSocket) {
+            socket.emit('host_private', { targetId, data });
+        } else {
+            if (connections[targetId]) connections[targetId].send(data);
+        }
+    };
+
+    const sendToHost = (data) => {
+        if (useSocket) {
+            socket.emit('client_send', { roomCode, data });
+        } else {
+            if (conn) conn.send(data);
+        }
+    };
+
+    // ------------------------------
 
     function runLocalTimer(duration, displayId, barId, onComplete) {
         clearInterval(gameTimerInterval);
@@ -604,46 +736,77 @@
             return;
         }
 
+        useSocket = document.getElementById('socketToggle').checked;
         btn.disabled = true; btn.innerText = "STARTING...";
         
         playerName = rawName.substring(0,10).toUpperCase();
-        const code = generateCode();
+        roomCode = generateCode();
 
         availablePrompts = [...PROMPTS];
+        myId = 'host'; 
+        isHost = true;
+        players = [{ id: 'host', name: playerName, score: 0 }];
 
-        peer = new Peer("ql-" + code, { debug: 1 });
-        
-        peer.on('open', (id) => {
-            myId = 'host'; isHost = true;
-            players = [{ id: 'host', name: playerName, score: 0 }];
-            showScreen('screen-lobby');
-            setSafeText('lobbyRoomCode', code);
-            setSafeText('roleTag', "HOST");
-            renderLobby();
-        });
+        if (useSocket) {
+            // Socket.io Mode
+            socket = io(SOCKET_SERVER_URL);
+            
+            socket.on('connect', () => {
+                socket.emit('create_room', roomCode);
+                showScreen('screen-lobby');
+                hideConnectionToggle();
+                setSafeText('lobbyRoomCode', roomCode);
+                setSafeText('roleTag', "HOST (WS)");
+                renderLobby();
+            });
 
-        peer.on('connection', (c) => {
-            c.on('open', () => {
-                connections[c.peer] = c;
-                c.on('data', (d) => handleHostData(c.peer, d));
-                c.on('close', () => {
-                    delete connections[c.peer];
-                    players = players.filter(p => p.id !== c.peer);
-                    renderLobby();
-                    broadcast({ type: 'UPDATE_LOBBY', players });
+            // When a player joins via Socket
+            socket.on('player_joined', ({ id, name }) => {
+                // Emulate the packet structure existing logic expects
+                const packet = { type: 'JOIN', name };
+                handleHostData(id, packet);
+            });
+
+            // When data arrives from a player
+            socket.on('player_data', ({ id, data }) => {
+                handleHostData(id, data);
+            });
+
+        } else {
+            // PeerJS Mode
+            peer = new Peer("ql-" + roomCode, { debug: 1 });
+            
+            peer.on('open', (id) => {
+                showScreen('screen-lobby');
+                hideConnectionToggle();
+                setSafeText('lobbyRoomCode', roomCode);
+                setSafeText('roleTag', "HOST (P2P)");
+                renderLobby();
+            });
+
+            peer.on('connection', (c) => {
+                c.on('open', () => {
+                    connections[c.peer] = c;
+                    c.on('data', (d) => handleHostData(c.peer, d));
+                    c.on('close', () => {
+                        delete connections[c.peer];
+                        players = players.filter(p => p.id !== c.peer);
+                        renderLobby();
+                        broadcast({ type: 'UPDATE_LOBBY', players });
+                    });
                 });
             });
-        });
 
-        peer.on('error', (err) => {
-            if(err.type === 'unavailable-id') { 
-                peer.destroy(); setTimeout(startHost, 100);
-            } else {
-                alert("Connection Error. Try again.");
-                btn.disabled = false;
-                btn.innerText = "HOST GAME";
-            }
-        });
+            peer.on('error', (err) => {
+                if(err.type === 'unavailable-id') { 
+                    peer.destroy(); setTimeout(startHost, 100);
+                } else {
+                    alert("Connection Error. Try again.");
+                    btn.disabled = false;
+                    btn.innerText = "HOST GAME";
+                }
+            });
+        }
     }
 
     function processPlayerAnswers(pid, answers) {
@@ -669,8 +832,8 @@
             
             const isNameTaken = players.some(p => p.name.toUpperCase() === name.toUpperCase());
             if (isNameTaken) {
-                connections[pid]?.send({ type: 'JOIN_REJECTED', reason: 'That name is already taken!' });
-                setTimeout(() => connections[pid]?.close(), 500);
+                sendToClient(pid, { type: 'JOIN_REJECTED', reason: 'That name is already taken!' });
+                if (!useSocket) setTimeout(() => connections[pid]?.close(), 500);
                 return;
             }
 
@@ -749,7 +912,7 @@
             const promptData = [{ battleIndex: 'final', text: finalRoundPrompt }];
             players.forEach(p => {
                  if(p.id === 'host') handleClientStartRound(promptData, round);
-                 else connections[p.id].send({ type: 'START_ROUND', prompts: promptData, currentRound: round });
+                 else sendToClient(p.id, { type: 'START_ROUND', prompts: promptData, currentRound: round });
             });
         } else {
             const shuffledPlayers = [...players].sort(()=>0.5-Math.random());
@@ -764,7 +927,7 @@
                 const pBattles = battles.filter(b => b.p1Id === p.id || b.p2Id === p.id);
                 const promptData = pBattles.map(b => ({ battleIndex: b.id, text: b.prompt }));
                 if(p.id === 'host') handleClientStartRound(promptData, round);
-                else connections[p.id].send({ type: 'START_ROUND', prompts: promptData, currentRound: round });
+                else sendToClient(p.id, { type: 'START_ROUND', prompts: promptData, currentRound: round });
             });
         }
 
@@ -904,7 +1067,6 @@
         }, 7000);
     }
 
-    // FIX 1: Revised calculateFinalResults for 100% rounding
     function calculateFinalResults() {
         clearInterval(gameTimerInterval);
         const voteCounts = {};
@@ -920,7 +1082,6 @@
         const results = [];
         const baseScore = 3000;
 
-        // First pass: Calculate raw percentages (using Math.floor)
         players.forEach(p => {
             const pVotes = voteCounts[p.id] || 0;
             const percentage = totalVotes > 0 ? Math.floor((pVotes / totalVotes) * 100) : 0;
@@ -929,13 +1090,11 @@
             results.push({ playerId: p.id, votes: pVotes, percentage, score });
         });
 
-        // Second pass: Adjust for rounding to ensure it equals exactly 100%
         if (totalVotes > 0) {
             let currentTotalPerc = results.reduce((sum, r) => sum + r.percentage, 0);
             let diff = 100 - currentTotalPerc;
             
             if (diff !== 0) {
-                // Find the result with the most votes to adjust.
                 results.sort((a, b) => b.votes - a.votes);
                 results[0].percentage += diff;
             }
@@ -973,28 +1132,58 @@
             alert("You must enter a Name to join!"); return;
         }
 
+        useSocket = document.getElementById('socketToggle').checked;
         btn.disabled = true; btn.innerText = "SEARCHING...";
-        playerName = rawName.substring(0,10);
-        const code = document.getElementById('roomCodeInput').value.toUpperCase();
         
-        peer = new Peer({ debug: 1 });
-        peer.on('open', (id) => {
-            myId = id;
-            conn = peer.connect("ql-" + code);
+        playerName = rawName.substring(0,10);
+        roomCode = document.getElementById('roomCodeInput').value.toUpperCase();
+
+        if (useSocket) {
+            // Socket.io Mode
+            socket = io(SOCKET_SERVER_URL);
             
-            conn.on('open', () => {
-                conn.send({ type: 'JOIN', name: playerName });
-                showScreen('screen-lobby');
-                setSafeText('lobbyRoomCode', code);
-                setSafeText('roleTag', playerName);
+            socket.on('connect', () => {
+                myId = socket.id;
+                socket.emit('join_room', { roomCode, name: playerName });
             });
-            conn.on('data', d => handleClientData(d));
-            conn.on('close', () => alert("Host ended the game."));
-            
-            setTimeout(() => {
-                if(!conn.open) { alert("Room not found!"); btn.disabled = false; btn.innerText="JOIN GAME"; }
-            }, 3000);
-        });
+
+            socket.on('game_data', (data) => {
+                 handleClientData(data);
+            });
+
+            socket.on('error_msg', (msg) => {
+                alert(msg);
+                location.reload();
+            });
+
+            // For Socket mode, we optimistically show lobby and wait for update
+            showScreen('screen-lobby');
+            hideConnectionToggle();
+            setSafeText('lobbyRoomCode', roomCode);
+            setSafeText('roleTag', playerName);
+
+        } else {
+            // PeerJS Mode
+            peer = new Peer({ debug: 1 });
+            peer.on('open', (id) => {
+                myId = id;
+                conn = peer.connect("ql-" + roomCode);
+                
+                conn.on('open', () => {
+                    conn.send({ type: 'JOIN', name: playerName });
+                    showScreen('screen-lobby');
+                    hideConnectionToggle();
+                    setSafeText('lobbyRoomCode', roomCode);
+                    setSafeText('roleTag', playerName);
+                });
+                conn.on('data', d => handleClientData(d));
+                conn.on('close', () => alert("Host ended the game."));
+                
+                setTimeout(() => {
+                    if(!conn.open) { alert("Room not found!"); btn.disabled = false; btn.innerText="JOIN GAME"; }
+                }, 3000);
+            });
+        }
     }
 
     function handleClientData(data) {
@@ -1061,8 +1250,11 @@
             document.getElementById('inputForm').style.display = 'none';
             document.getElementById('inputWaitMsg').style.display = 'block';
             
-            const connObj = isHost ? { send: (data) => processPlayerAnswers(myId, data.answers) } : conn;
-            connObj.send({ type: 'SUBMIT_ANSWERS', answers: myAnswers });
+            if (isHost) {
+                processPlayerAnswers(myId, myAnswers);
+            } else {
+                sendToHost({ type: 'SUBMIT_ANSWERS', answers: myAnswers });
+            }
         }
     }
 
@@ -1077,17 +1269,20 @@
     function renderVoteScreen(data) {
         showScreen('screen-vote');
         setSafeText('votePromptText', data.prompt);
-        setSafeText('textVoteA', data.a1);
-        setSafeText('textVoteB', data.a2);
+        // We do NOT use setSafeText on the spans here anymore, we build the HTML directly below.
         
         const btnA = document.getElementById('btnVoteA');
         const btnB = document.getElementById('btnVoteB');
+        
+        // Reset buttons
         [btnA, btnB].forEach(b => {
             b.classList.remove('dimmed', 'winner', 'selected');
             b.style.pointerEvents = 'auto';
-            // Restore innerHTML structure safely
-            b.innerHTML = `<span id="${b.id.replace('btn','text')}">${b.innerText}</span><div class="vote-perc" id="${b.id.replace('btnVote','perc')}">0%</div>`
         });
+
+        // Set HTML directly from data to avoid appending "0%" from existing innerText
+        btnA.innerHTML = `<span id="textVoteA">${data.a1}</span><div class="vote-perc" id="percA">0%</div>`;
+        btnB.innerHTML = `<span id="textVoteB">${data.a2}</span><div class="vote-perc" id="percB">0%</div>`;
 
         document.getElementById('percA').style.transform = 'scale(0)';
         document.getElementById('percB').style.transform = 'scale(0)';
@@ -1140,14 +1335,17 @@
         btnA.style.pointerEvents = 'none'; btnB.style.pointerEvents = 'none';
         setSafeText('voteStatus', "VOTE LOCKED!");
 
-        const connObj = isHost ? { send: (data) => handleHostData(myId, data) } : conn;
-        connObj.send({ type: 'VOTE', choice });
+        if (isHost) {
+            handleHostData(myId, { type: 'VOTE', choice });
+        } else {
+            sendToHost({ type: 'VOTE', choice });
+        }
     }
 
     function castFinalVote(votedForId) {
         setSafeText('finalVoteStatus', "VOTE LOCKED!");
         document.querySelectorAll('#finalVoteList .answer-btn').forEach(btn => {
-            btn.onclick = null; // remove onclick
+            btn.onclick = null;
             if (btn.dataset.playerId === votedForId) {
                 btn.classList.add('selected');
             } else {
@@ -1155,8 +1353,11 @@
             }
         });
 
-        const connObj = isHost ? { send: (data) => handleHostData(myId, data) } : conn;
-        connObj.send({ type: 'FINAL_VOTE', votedForId });
+        if (isHost) {
+            handleHostData(myId, { type: 'FINAL_VOTE', votedForId });
+        } else {
+            sendToHost({ type: 'FINAL_VOTE', votedForId });
+        }
     }
 
     function renderVoteResult(data) {
@@ -1168,7 +1369,6 @@
         const textA = document.getElementById('textVoteA');
         const textB = document.getElementById('textVoteB');
 
-        // Preserve original inner text while appending the name
         textA.textContent = `"${textA.textContent}"`;
         textA.innerHTML += `<br><span style="font-size:1rem; color:#666; margin-top:5px; display:block;">— ${data.nameA}</span>`;
         textB.textContent = `"${textB.textContent}"`;
@@ -1189,7 +1389,6 @@
         }, 1200);
     }
     
-    // FIX 2 & 3: Revised renderFinalVoteResult to append name safely and ensure animation starts
     function renderFinalVoteResult(data) {
         clearInterval(gameTimerInterval);
         setSafeText('finalVoteStatus', "RESULTS!");
@@ -1208,7 +1407,6 @@
                 
                 const pInfo = players.find(p => p.id === result.playerId);
                 if (pInfo) {
-                    // Create and append a name span instead of overwriting innerHTML
                     const nameSpan = document.createElement('span');
                     nameSpan.style.cssText = "font-size:1rem; color:#666; margin-top:5px; display:block;";
                     nameSpan.textContent = `— ${pInfo.name}`;
@@ -1222,7 +1420,6 @@
         });
     }
 
-    // FIX 2: Revised animateValue to use textContent and ensure correct end value.
     function animateValue(obj, start, end, duration) {
         let startTimestamp = null;
         const step = (timestamp) => {
@@ -1233,7 +1430,7 @@
             if (progress < 1) {
                 window.requestAnimationFrame(step);
             } else {
-                obj.textContent = end + "%"; // Ensure it lands exactly on the end number
+                obj.textContent = end + "%";
             }
         };
         window.requestAnimationFrame(step);
