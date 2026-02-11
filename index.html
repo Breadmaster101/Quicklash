@@ -438,7 +438,7 @@
             
             <textarea id="answerInput" rows="3" placeholder="WRITE SOMETHING FUNNY..." maxlength="45"></textarea>
             
-            <button class="btn" onclick="submitCurrentAnswer(this)">SUBMIT QUIP</button>
+            <button class="btn" id="submitBtn" onclick="submitCurrentAnswer(this)">SUBMIT QUIP</button>
             <p style="font-size:0.8rem; color:#888;">Don't be boring.</p>
         </div>
 
@@ -506,511 +506,12 @@
     const INPUT_TIME_LIMIT = 90;
     const VOTE_TIME_LIMIT = 20;
     const SOCKET_SERVER_URL = "https://quicklash-server.onrender.com";
-    const PROMPTS = [
-        // --- CLASSIC STYLE ---
+    const FALLBACK_PROMPTS = [
         "A bad substitute for a toothbrush.",
         "A better name for testicles.",
         "A rejected name for a Crayola crayon.",
         "The worst thing to find in your burrito.",
-        "A better name for the game of Cricket.",
-        "What the Queen keeps in her purse.",
-        "A bad thing to say after kissing someone.",
-        "The worst theme for a prom.",
-        "Something you shouldn't put in a piñata.",
-        "The name of a pizza place you should never visit.",
-        "A great opening line for a breakup letter.",
-        "What cats are really plotting.",
-        "A rejected flavor of ice cream.",
-        "The title of a memoir by a hamster.",
-        "Something you’d find in Donald Trump’s pockets.",
-        "The worst thing to hear from your surgeon.",
-        "A terrible name for a rap artist.",
-        "Why the chicken actually crossed the road.",
-        "A superpower that is actually super inconvenient.",
-        "The worst thing to whisper in a library.",
-        "What the Mona Lisa is smiling about.",
-        "A bad name for a racehorse.",
-        "What you don't want to hear from the pilot.",
-        "A slogan for a funeral home.",
-        "The unsexiest feature a person can have.",
-        "A rejected title for 'Star Wars'.",
-        "What really happens at Area 51.",
-        "A terrible gift for a baby shower.",
-        "The worst person to be stuck in an elevator with.",
-        "A catchy name for a venereal disease.",
-        "What you shouldn't say during a job interview.",
-        "The title of a YouTube video with 0 views.",
-        "A weird thing to frame and hang on the wall.",
-        "The worst magic spell: 'Harry Potter and the...'",
-        "Something you shouldn't do while naked.",
-        "A rejected shape for a Chicken McNugget.",
-        "The real reason the Titanic sank.",
-        "What God said when he created the platypus.",
-        "A bad substitute for toilet paper.",
-        "The worst thing to say when proposing.",
-        "An ingredient in a witch's 'budget' potion.",
-        "What you'd find in a minimalist's trash can.",
-        "A reason to call 911 that isn't an emergency.",
-        "The worst tattoo to get on your face.",
-        "A book that should be banned for being too boring.",
-        "What squirrels talk about.",
-        "A bad name for a pirate ship.",
-        "The worst thing to slip on.",
-        "Something that sounds dirty but isn't.",
-        "A rejected Transformer name.",
-        "The worst way to quit your job.",
-        "What vampires use instead of sunscreen.",
-        "A terrible catchphrase for a superhero.",
-        "The grossest smoothie combination.",
-        "What statues think about all day.",
-        "A rejected Olympic sport.",
-        "The worst thing to hear in a public restroom.",
-        "A headline you'd see in Florida.",
-        "What you shouldn't put in the microwave.",
-        "The name of a cologne for gamers.",
-        "A bad place to take a nap.",
-        "What dogs actually smell when they sniff butts.",
-        "The worst password you could have.",
-        "Something you shouldn't say to a police officer.",
-        "A rejected Monopoly token.",
-        "The worst flavor of toothpaste.",
-        "What you'd find in the pockets of a zombie.",
-        "A sign you're at a bad restaurant.",
-        "The worst lullaby lyric.",
-        "Something you shouldn't use as a weapon.",
-        "A bad name for a strip club.",
-        "What aliens really want from Earth.",
-        "A rejected character from Sesame Street.",
-        "The worst thing to yell at a wedding.",
-        "What makes a man instantly unattractive.",
-        "A weird thing to be allergic to.",
-        "The worst prize in a cereal box.",
-        "A text you shouldn't send to your mom.",
-        "The name of a law firm you shouldn't trust.",
-        "What you shouldn't do in a haunted house.",
-        "A bad excuse for being late.",
-        "The worst thing to catch while fishing.",
-        "A weird thing to collect.",
-        "What Santa does on December 26th.",
-        "A rejected emoji.",
-        "The worst advice you've ever received.",
-        "A bad slogan for a gym.",
-        "What fish think about.",
-        
-        // --- QUIPLASH 2 STYLE ---
-        "A good fake name to use when checking into a hotel.",
-        "The worst thing to say when someone shows you their baby.",
-        "A rejected name for the iPhone.",
-        "Something you'd be surprised to see a donkey do.",
-        "The worst job to have while hungover.",
-        "A rejected title for the Bible.",
-        "What bears really do in the woods.",
-        "A bad name for a medical journal.",
-        "The worst thing to find under your bed.",
-        "Something you shouldn't say to a flight attendant.",
-        "A rejected name for a yoga pose.",
-        "The worst thing to do at a job interview.",
-        "A bad name for a clown.",
-        "Something you shouldn't say to a judge.",
-        "The worst thing to wear to a funeral.",
-        "A rejected name for a planet.",
-        "Something you shouldn't say to your doctor.",
-        "The worst thing to find in your locker.",
-        "A bad name for a boy band.",
-        "Something you shouldn't say to a priest.",
-        "The worst thing to find in your soup.",
-        "A rejected name for a superhero.",
-        "Something you shouldn't say to a teacher.",
-        "The worst thing to find in your car.",
-        "A bad name for a dog.",
-        "Something you shouldn't say to a police officer.",
-        "The worst thing to find in your house.",
-        "A rejected name for a city.",
-        "Something you shouldn't say to a waiter.",
-        "The worst thing to find in your pocket.",
-        "A bad name for a cat.",
-        "Something you shouldn't say to a boss.",
-        "The worst thing to find in your shoe.",
-        "A rejected name for a country.",
-        "Something you shouldn't say to a celebrity.",
-        "The worst thing to find in your bag.",
-        "A bad name for a bird.",
-        "Something you shouldn't say to a neighbor.",
-        "The worst thing to find in your fridge.",
-        "A rejected name for a mountain.",
-        "Something you shouldn't say to a stranger.",
-        "The worst thing to find in your bathroom.",
-        "A bad name for a fish.",
-        "Something you shouldn't say to a friend.",
-        "The worst thing to find in your kitchen.",
-        "A rejected name for a river.",
-        "Something you shouldn't say to a family member.",
-        "The worst thing to find in your bedroom.",
-        "A bad name for a hamster.",
-        "Something you shouldn't say to a partner.",
-        
-        // --- QUIPLASH 3 / SURREAL STYLE ---
-        "The sound a giraffe makes.",
-        "If you can't say anything nice, say __________.",
-        "A better name for a butt.",
-        "The worst liquid to fill a waterbed with.",
-        "A bad use for a chainsaw.",
-        "The worst thing to juggle.",
-        "A rejected Ben & Jerry's flavor.",
-        "Something you shouldn't put on a resume.",
-        "The worst thing to say during sex.",
-        "A bad name for a boat.",
-        "Something you shouldn't do in a library.",
-        "The worst thing to say to a crying child.",
-        "A bad name for a car.",
-        "Something you shouldn't do in a movie theater.",
-        "The worst thing to say to a police officer.",
-        "A bad name for a band.",
-        "Something you shouldn't do in a church.",
-        "The worst thing to say to a waiter.",
-        "A bad name for a restaurant.",
-        "Something you shouldn't do in a hospital.",
-        "The worst thing to say to a doctor.",
-        "A bad name for a school.",
-        "Something you shouldn't do in a museum.",
-        "The worst thing to say to a teacher.",
-        "A bad name for a book.",
-        "Something you shouldn't do in a park.",
-        "The worst thing to say to a parent.",
-        "A bad name for a movie.",
-        "Something you shouldn't do in a zoo.",
-        "The worst thing to say to a boss.",
-        "A bad name for a song.",
-        "Something you shouldn't do in a gym.",
-        "The worst thing to say to a coach.",
-        "A bad name for a team.",
-        "Something you shouldn't do in a store.",
-        "The worst thing to say to a cashier.",
-        "A bad name for a product.",
-        "Something you shouldn't do in a bank.",
-        "The worst thing to say to a teller.",
-        "A bad name for a bank.",
-        "Something you shouldn't do in a post office.",
-        "The worst thing to say to a mail carrier.",
-        "A bad name for a post office.",
-        "Something you shouldn't do in a police station.",
-        "The worst thing to say to a detective.",
-        "A bad name for a police station.",
-        "Something you shouldn't do in a fire station.",
-        "The worst thing to say to a firefighter.",
-        "A bad name for a fire station.",
-        "Something you shouldn't do in a courtroom.",
-        
-        // --- "THE WORST" COLLECTION ---
-        "The worst thing to say as you unplug your grandfather's life support.",
-        "The worst thing to hear when you're alone in the dark.",
-        "The worst ingredient to find in a salad.",
-        "The worst novelty cologne scent.",
-        "The worst thing to say when you forget someone's name.",
-        "The worst reason to get a divorce.",
-        "The worst catchy slogan for a hitman.",
-        "The worst thing to use as a garnish.",
-        "The worst thing to yell while climaxing.",
-        "The worst way to break the ice on a first date.",
-        "The worst flavor of condom.",
-        "The worst thing to accidentally tweet.",
-        "The worst thing to discover in your fast food burger.",
-        "The worst thing to say to a border patrol agent.",
-        "The worst distinct feature to have described in a police sketch.",
-        "The worst thing to drop into the toilet.",
-        "The worst thing to realize while skydiving.",
-        "The worst thing to witness your parents doing.",
-        "The worst possible topping for a pizza.",
-        "The worst thing to find inside a fortune cookie.",
-        "The worst person to share a sleeping bag with.",
-        "The worst thing to use to clean your ears.",
-        "The worst thing to say to someone who just got fired.",
-        "The worst euphemism for death.",
-        "The worst excuse for cheating on your spouse.",
-        "The worst thing to do with a dead body.",
-        "The worst thing to say to a nun.",
-        "The worst thing to do at a funeral.",
-        "The worst thing to say to a grieving widow.",
-        "The worst thing to do at a wedding.",
-        "The worst thing to say to a bride.",
-        "The worst thing to do at a baby shower.",
-        "The worst thing to say to a pregnant woman.",
-        "The worst thing to do at a graduation.",
-        "The worst thing to say to a graduate.",
-        "The worst thing to do at a birthday party.",
-        "The worst thing to say to the birthday boy/girl.",
-        "The worst thing to do at a retirement party.",
-        "The worst thing to say to a retiree.",
-        "The worst thing to do at a housewarming party.",
-        "The worst thing to say to a new homeowner.",
-        "The worst thing to do at a dinner party.",
-        "The worst thing to say to the host.",
-        "The worst thing to do at a potluck.",
-        "The worst thing to bring to a potluck.",
-        "The worst thing to do at a picnic.",
-        "The worst thing to bring to a picnic.",
-        "The worst thing to do at a barbecue.",
-        "The worst thing to bring to a barbecue.",
-        "The worst thing to do at a tailgate.",
-        
-        // --- "REJECTED" COLLECTION ---
-        "A rejected name for a boy.",
-        "A rejected name for a girl.",
-        "A rejected name for a dog.",
-        "A rejected name for a cat.",
-        "A rejected name for a bird.",
-        "A rejected name for a fish.",
-        "A rejected name for a hamster.",
-        "A rejected name for a car.",
-        "A rejected name for a boat.",
-        "A rejected name for a plane.",
-        "A rejected name for a train.",
-        "A rejected name for a bike.",
-        "A rejected name for a school.",
-        "A rejected name for a hospital.",
-        "A rejected name for a library.",
-        "A rejected name for a park.",
-        "A rejected name for a street.",
-        "A rejected name for a city.",
-        "A rejected name for a state.",
-        "A rejected name for a country.",
-        "A rejected name for a planet.",
-        "A rejected name for a star.",
-        "A rejected name for a galaxy.",
-        "A rejected name for a universe.",
-        "A rejected name for a superhero.",
-        "A rejected name for a villain.",
-        "A rejected name for a sidekick.",
-        "A rejected name for a team.",
-        "A rejected name for a band.",
-        "A rejected name for a song.",
-        "A rejected name for a movie.",
-        "A rejected name for a book.",
-        "A rejected name for a play.",
-        "A rejected name for a musical.",
-        "A rejected name for a painting.",
-        "A rejected name for a sculpture.",
-        "A rejected name for a photograph.",
-        "A rejected name for a dance.",
-        "A rejected name for a recipe.",
-        "A rejected name for a drink.",
-        "A rejected name for a food.",
-        "A rejected name for a restaurant.",
-        "A rejected name for a store.",
-        "A rejected name for a company.",
-        "A rejected name for a product.",
-        "A rejected name for a service.",
-        "A rejected name for a website.",
-        "A rejected name for a app.",
-        "A rejected name for a game.",
-        "A rejected name for a toy.",
-
-        // --- CREATIVE / ABSTRACT ---
-        "A weird thing to teach a parrot to say.",
-        "The slogan for a very shady law firm.",
-        "Something you’d be surprised to see a ninja do.",
-        "The 11th Commandment: Thou shalt not _______.",
-        "The scariest thing to wake up next to.",
-        "Something a mime would say if they could talk.",
-        "The best way to get fired on your first day.",
-        "A good use for a leftover pumpkin.",
-        "The worst thing to put in a piñata.",
-        "Something you shouldn't say to a telemarketer.",
-        "A bad name for a retirement home.",
-        "The worst thing to find in your Christmas stocking.",
-        "Something you shouldn't say to a ghost.",
-        "A bad name for a daycare center.",
-        "The worst thing to find in your Easter basket.",
-        "Something you shouldn't say to a vampire.",
-        "A bad name for a pet store.",
-        "The worst thing to find in your Halloween candy.",
-        "Something you shouldn't say to a werewolf.",
-        "A bad name for a beauty salon.",
-        "The worst thing to find in your Valentine's Day card.",
-        "Something you shouldn't say to a zombie.",
-        "A bad name for a gym.",
-        "The worst thing to find in your birthday cake.",
-        "Something you shouldn't say to a witch.",
-        "A bad name for a bakery.",
-        "The worst thing to find in your sandwich.",
-        "Something you shouldn't say to a mermaid.",
-        "A bad name for a coffee shop.",
-        "The worst thing to find in your pizza.",
-        "Something you shouldn't say to a fairy.",
-        "A bad name for a bar.",
-        "The worst thing to find in your taco.",
-        "Something you shouldn't say to a goblin.",
-        "A bad name for a nightclub.",
-        "The worst thing to find in your burger.",
-        "Something you shouldn't say to a dragon.",
-        "A bad name for a hotel.",
-        "The worst thing to find in your pasta.",
-        "Something you shouldn't say to a unicorn.",
-        "A bad name for a motel.",
-        "The worst thing to find in your soup.",
-        "Something you shouldn't say to a leprechaun.",
-        "A bad name for a resort.",
-        "The worst thing to find in your salad.",
-        "Something you shouldn't say to a giant.",
-        "A bad name for a spa.",
-        "The worst thing to find in your cereal.",
-        "Something you shouldn't say to a gnome.",
-        "A bad name for a casino.",
-
-        // --- MODERN / INTERNET ERA ---
-        "A YouTube clickbait title for a video about cheese.",
-        "The worst Tinder bio ever.",
-        "Something you'd find in Elon Musk's trash.",
-        "A Google search you'd be embarrassed to have in your history.",
-        "The worst hashtag for a funeral.",
-        "A rejected emoji proposal.",
-        "What the 'i' in iPhone really stands for.",
-        "A podcast nobody would listen to.",
-        "The worst thing to post on Facebook.",
-        "A tweet that would get you cancelled immediately.",
-        "The worst GoFundMe campaign.",
-        "A weird thing to see an influencer promote.",
-        "The name of a subreddit that shouldn't exist.",
-        "The worst thing to do on a Zoom call.",
-        "A TikTok trend that needs to stop.",
-        "The worst thing to sell on eBay.",
-        "A rejected name for a cryptocurrency.",
-        "The worst thing to stream on Twitch.",
-        "A LinkedIn skill you shouldn't list.",
-        "The worst thing to send via AirDrop.",
-        "A bad name for a Wi-Fi network.",
-        "The worst thing to say in a group chat.",
-        "A rejected filter for Instagram.",
-        "The worst thing to ask Siri.",
-        "A bad name for a YouTube channel.",
-        "The worst thing to find on the dark web.",
-        "A rejected meme format.",
-        "The worst thing to binge-watch on Netflix.",
-        "A bad name for a streaming service.",
-        "The worst thing to spoil for someone.",
-        "A rejected name for a smart home device.",
-        "The worst thing to say to Alexa.",
-        "A bad name for a virtual assistant.",
-        "The worst thing to do in VR.",
-        "A rejected name for a metaverse.",
-        "The worst thing to buy with Bitcoin.",
-        "A bad name for an NFT.",
-        "The worst thing to put on your dating profile.",
-        "A rejected match on Tinder.",
-        "The worst thing to say on a first date.",
-        "A bad name for a dating app.",
-        "The worst thing to ghost someone for.",
-        "A rejected breakup text.",
-        "The worst thing to say to your ex.",
-        "A bad name for a couple.",
-        "The worst thing to do on Valentine's Day.",
-        "A rejected romantic gesture.",
-        "The worst thing to get as a gift.",
-        "A bad name for a holiday.",
-        "The worst thing to celebrate.",
-
-        // --- COMPLETING THE COUNT (MIXED BAG) ---
-        "Why the dinosaurs really went extinct.",
-        "The worst thing to hear from a ventriloquist dummy.",
-        "A rejected shape for pasta.",
-        "What really happens in the Bermuda Triangle.",
-        "A bad name for a travel agency.",
-        "The worst thing to say to a customs officer.",
-        "A rejected souvenir from Paris.",
-        "The worst thing to do at the beach.",
-        "A bad name for a sunscreen.",
-        "The worst thing to find in your swimsuit.",
-        "Something you shouldn't say to a lifeguard.",
-        "A bad name for a surfboard.",
-        "The worst thing to see in the ocean.",
-        "Something you shouldn't say to a shark.",
-        "A bad name for a boat.",
-        "The worst thing to happen on a cruise.",
-        "Something you shouldn't say to the captain.",
-        "A bad name for an island.",
-        "The worst thing to find in a treasure chest.",
-        "Something you shouldn't say to a pirate.",
-        "A bad name for a parrot.",
-        "The worst thing to feed a bird.",
-        "Something you shouldn't say to a monkey.",
-        "A bad name for a zoo.",
-        "The worst thing to see in a cage.",
-        "Something you shouldn't say to a zookeeper.",
-        "A bad name for a circus.",
-        "The worst thing to see in a tent.",
-        "Something you shouldn't say to a clown.",
-        "A bad name for a magician.",
-        "The worst thing to find in a hat.",
-        "Something you shouldn't say to a rabbit.",
-        "A bad name for a wand.",
-        "The worst thing to do with a deck of cards.",
-        "Something you shouldn't say to a fortune teller.",
-        "A bad name for a crystal ball.",
-        "The worst thing to see in the future.",
-        "Something you shouldn't say to a time traveler.",
-        "A bad name for a time machine.",
-        "The worst time period to visit.",
-        "Something you shouldn't say to a caveman.",
-        "A bad name for a dinosaur.",
-        "The worst thing to hunt.",
-        "Something you shouldn't say to a hunter.",
-        "A bad name for a weapon.",
-        "The worst thing to use as bait.",
-        "Something you shouldn't say to a fisherman.",
-        "A bad name for a hook.",
-        "The worst thing to catch.",
-        "Something you shouldn't say to a fish.",
-        
-        "A completely fake fact about owls.",
-        "The worst name for a heavy metal band.",
-        "A sign you've had too much to drink.",
-        "The worst thing to see in your rearview mirror.",
-        "What Yoda says during sex.",
-        "A bad place to hide a body.",
-        "The worst thing to say to a psychiatrist.",
-        "A rejected name for a mental asylum.",
-        "The worst thing to find in a straitjacket.",
-        "Something you shouldn't say to a crazy person.",
-        "A bad name for a pill.",
-        "The worst side effect of a medication.",
-        "Something you shouldn't say to a pharmacist.",
-        "A bad name for a drug store.",
-        "The worst thing to buy at a pharmacy.",
-        "Something you shouldn't say to a doctor.",
-        "A bad name for a hospital.",
-        "The worst thing to find in a hospital bed.",
-        "Something you shouldn't say to a nurse.",
-        "A bad name for a surgery.",
-        "The worst thing to remove during surgery.",
-        "Something you shouldn't say to a surgeon.",
-        "A bad name for a dentist.",
-        "The worst thing to find in your teeth.",
-        "Something you shouldn't say to a hygienist.",
-        "A bad name for a toothbrush.",
-        "The worst flavor of floss.",
-        "Something you shouldn't say to the tooth fairy.",
-        "A bad name for a toothpaste.",
-        "The worst thing to rinse with.",
-        "Something you shouldn't say to a mirror.",
-        "A bad name for a reflection.",
-        "The worst thing to see in a mirror.",
-        "Something you shouldn't say to a ghost.",
-        "A bad name for a haunted house.",
-        "The worst thing to find in an attic.",
-        "Something you shouldn't say to a bat.",
-        "A bad name for a vampire.",
-        "The worst thing to drink.",
-        "Something you shouldn't say to a bartender.",
-        "A bad name for a cocktail.",
-        "The worst garnish for a drink.",
-        "Something you shouldn't say to a drunk person.",
-        "A bad name for a hangover cure.",
-        "The worst thing to eat when drunk.",
-        "Something you shouldn't say to a taxi driver.",
-        "A bad name for a taxi company.",
-        "The worst place to be dropped off.",
-        "Something you shouldn't say to a stranger.",
-        "A bad name for a friend."
+        "A better name for the game of Cricket."
     ];
 
     const SAFETY_QUIPS = [
@@ -1039,12 +540,15 @@
     let battles = []; 
     let currentBattleIndex = 0;
     
+    // User Prompt Logic
+    let collectedPrompts = {}; // { playerId: "Prompt Text" }
+    let isWritingPrompts = false; // Client state
+    let isVotingOnPrompts = false; // Final round state
+
     let finalRoundAnswers = {};
     let finalRoundPrompt = "";
     let finalVotes = {};
 
-    let availablePrompts = [];
-    
     let myPrompts = [];
     let currentPromptIndex = 0;
     let myAnswers = {}; 
@@ -1159,7 +663,6 @@
         playerName = rawName.substring(0,10).toUpperCase();
         roomCode = generateCode();
 
-        availablePrompts = [...PROMPTS];
         myId = 'host'; 
         isHost = true;
         players = [{ id: 'host', name: playerName, score: 0 }];
@@ -1260,6 +763,20 @@
                 broadcast({ type: 'UPDATE_LOBBY', players });
             }
         }
+        else if (data.type === 'SUBMIT_PROMPT') {
+            // New Phase 1: Collect prompts
+            collectedPrompts[pid] = data.prompt && data.prompt.trim().length > 0 ? data.prompt.trim() : null;
+            
+            if (Object.keys(collectedPrompts).length >= players.length) {
+                // All prompts in
+                clearInterval(gameTimerInterval);
+                if (round === 3) {
+                    startPromptVotingPhase(); // Round 3 special logic
+                } else {
+                    distributePromptsAndStartRound(); // Round 1 & 2 logic
+                }
+            }
+        }
         else if (data.type === 'SUBMIT_ANSWERS') {
             processPlayerAnswers(pid, data.answers);
         }
@@ -1272,7 +789,12 @@
         }
         else if (data.type === 'FINAL_VOTE') {
             finalVotes[pid] = data.votedForId;
-            checkAllFinalVotesReceived();
+            // This is used for both Prompt Voting (Round 3 phase 1) and Final Answer Voting (Round 3 phase 2)
+            if (isVotingOnPrompts) {
+                checkAllPromptVotesReceived();
+            } else {
+                checkAllFinalVotesReceived();
+            }
         }
     }
 
@@ -1306,52 +828,189 @@
     function hostStartGame() {
         if(players.length < 3) return;
         round = 1;
-        startRound();
+        startPromptPhase(); // Changed from startRound to startPromptPhase
     }
 
-    function startRound() {
-        battles = [];
+    // --- NEW PHASE: PROMPT WRITING ---
+    function startPromptPhase() {
+        collectedPrompts = {};
+        isVotingOnPrompts = false;
+        
         const roundTag = document.getElementById('roundTag');
         roundTag.style.display = 'block';
         roundTag.textContent = round === 3 ? "FINAL ROUND" : "ROUND " + round;
 
+        broadcast({ type: 'START_PROMPT_WRITING', currentRound: round });
+        
+        if (isHost) {
+            handleClientPromptWriting(round);
+        }
+        
+        runLocalTimer(90, 'inputTimer', null, () => {
+             // If timeout, fill with defaults
+             players.forEach(p => {
+                 if(!collectedPrompts[p.id]) collectedPrompts[p.id] = FALLBACK_PROMPTS[Math.floor(Math.random()*FALLBACK_PROMPTS.length)];
+             });
+             if (round === 3) startPromptVotingPhase();
+             else distributePromptsAndStartRound();
+        });
+    }
+
+    // --- LOGIC FOR DISTRIBUTING PROMPTS (R1 & R2) ---
+    function distributePromptsAndStartRound() {
+        battles = [];
         const count = players.length;
-        availablePrompts.sort(()=>0.5-Math.random());
-
-        if (availablePrompts.length < count) {
-             availablePrompts = [...PROMPTS].sort(()=>0.5-Math.random());
-        }
-
-        if (round === 3) {
-            finalRoundAnswers = {};
-            finalVotes = {};
-            finalRoundPrompt = availablePrompts.pop() || "The meaning of life.";
-            const promptData = [{ battleIndex: 'final', text: finalRoundPrompt }];
-            players.forEach(p => {
-                 if(p.id === 'host') handleClientStartRound(promptData, round);
-                 else sendToClient(p.id, { type: 'START_ROUND', prompts: promptData, currentRound: round });
-            });
-        } else {
-            const shuffledPlayers = [...players].sort(()=>0.5-Math.random());
-            for(let i=0; i<count; i++) {
-                battles.push({
-                    id: i, prompt: availablePrompts.pop() || "Prompt shortage!",
-                    p1Id: shuffledPlayers[i].id, p2Id: shuffledPlayers[(i+1)%count].id,
-                    a1: null, a2: null, votesA: 0, votesB: 0
-                });
+        
+        // Convert collected prompts map to array of objects
+        // Ensuring everyone has a prompt. If not, fallback.
+        let promptList = players.map(p => ({
+            authorId: p.id,
+            text: collectedPrompts[p.id] || FALLBACK_PROMPTS[0]
+        }));
+        
+        // Shuffle prompts
+        promptList.sort(() => 0.5 - Math.random());
+        
+        // Create Battles
+        // Standard Quiplash Logic: P1 vs P2 on Prompt X.
+        // We want to avoid the Author answering their own prompt if possible.
+        // Simple ring assignment: 
+        // Battle i uses Prompt i.
+        // Player A = players[i]
+        // Player B = players[(i+1)%count]
+        // If Prompt i author is A or B, swap prompt?
+        
+        // Simplified approach for code compactness:
+        // 1. Assign prompts to battles.
+        // 2. Assign players to battles.
+        // 3. If collision, just allow it (it's a party game).
+        
+        const shuffledPlayers = [...players].sort(()=>0.5-Math.random());
+        
+        for(let i=0; i<count; i++) {
+            // Find a prompt that wasn't written by p1 or p2 if possible
+            let p1 = shuffledPlayers[i];
+            let p2 = shuffledPlayers[(i+1)%count];
+            
+            // Try to find a prompt not written by these two
+            let availablePrompt = promptList.find(pr => pr.authorId !== p1.id && pr.authorId !== p2.id);
+            
+            // If strict separation isn't possible (e.g. 3 players), just take the first one
+            // Note: In 3 players, P1, P2, P3. 
+            // Battle 1: P1 vs P2. Prompt author P3.
+            // Battle 2: P2 vs P3. Prompt author P1.
+            // Battle 3: P3 vs P1. Prompt author P2.
+            // This works perfectly for 3 players.
+            
+            if (!availablePrompt) {
+                 availablePrompt = promptList[0]; // Fallback
             }
-            players.forEach(p => {
-                const pBattles = battles.filter(b => b.p1Id === p.id || b.p2Id === p.id);
-                const promptData = pBattles.map(b => ({ battleIndex: b.id, text: b.prompt }));
-                if(p.id === 'host') handleClientStartRound(promptData, round);
-                else sendToClient(p.id, { type: 'START_ROUND', prompts: promptData, currentRound: round });
+            
+            // Remove used prompt to avoid repetition if count allows, 
+            // but we need exactly 'count' battles, and we have 'count' prompts.
+            // So we remove it from the search list.
+            promptList = promptList.filter(p => p !== availablePrompt);
+
+            battles.push({
+                id: i, prompt: availablePrompt.text,
+                promptAuthorId: availablePrompt.authorId,
+                p1Id: p1.id, p2Id: p2.id,
+                a1: null, a2: null, votesA: 0, votesB: 0
             });
         }
+        
+        // Now proceed to Standard Answer Phase
+        players.forEach(p => {
+            const pBattles = battles.filter(b => b.p1Id === p.id || b.p2Id === p.id);
+            const promptData = pBattles.map(b => ({ battleIndex: b.id, text: b.prompt }));
+            
+            if(p.id === 'host') handleClientStartRound(promptData, round);
+            else sendToClient(p.id, { type: 'START_ROUND', prompts: promptData, currentRound: round });
+        });
 
         broadcast({ type: 'START_TIMER', duration: INPUT_TIME_LIMIT, phase: 'input' });
         runLocalTimer(INPUT_TIME_LIMIT, 'inputTimer', null, () => handleInputTimeout());
         if(isHost) showScreen('screen-input');
     }
+
+    // --- LOGIC FOR ROUND 3 PROMPT VOTING ---
+    function startPromptVotingPhase() {
+        isVotingOnPrompts = true;
+        finalVotes = {};
+        
+        // Prepare data for voting screen
+        const voteOptions = players.map(p => ({
+            playerId: p.id,
+            playerName: p.name, // Author shown? Usually anonymous until end, but we'll hide name
+            answer: collectedPrompts[p.id] || "I didn't write anything." // Reusing 'answer' field for prompt text
+        }));
+        
+        const packet = {
+            type: 'FINAL_VOTE_PHASE', // Reusing the final vote screen structure
+            prompt: "VOTE FOR THE BEST PROMPT!",
+            answers: voteOptions,
+            duration: VOTE_TIME_LIMIT
+        };
+        
+        broadcast(packet);
+        renderFinalVoteScreen(packet); // Reuse UI
+        runLocalTimer(VOTE_TIME_LIMIT, 'finalVoteTimerText', 'finalVoteTimerBar', () => calculatePromptVoteResults());
+    }
+
+    function checkAllPromptVotesReceived() {
+        if (Object.keys(finalVotes).length >= players.length) {
+             clearInterval(gameTimerInterval);
+             calculatePromptVoteResults();
+        }
+    }
+
+    function calculatePromptVoteResults() {
+        // Tally votes to find winning prompt
+        const voteCounts = {};
+        Object.values(finalVotes).forEach(vid => {
+            voteCounts[vid] = (voteCounts[vid] || 0) + 1;
+        });
+        
+        // Find winner
+        let winnerId = players[0].id;
+        let maxVotes = -1;
+        
+        players.forEach(p => {
+            const v = voteCounts[p.id] || 0;
+            if (v > maxVotes) {
+                maxVotes = v;
+                winnerId = p.id;
+            }
+        });
+        
+        // Set final prompt
+        finalRoundPrompt = collectedPrompts[winnerId] || "Emergency Backup Prompt";
+        isVotingOnPrompts = false;
+        
+        // Award points to prompt writer? Optional. Let's give a small bonus.
+        const writer = players.find(p => p.id === winnerId);
+        if(writer) writer.score += 500; 
+
+        // Show result briefly? Or just go straight to answering?
+        // Let's go straight to answering for speed.
+        
+        finalRoundAnswers = {};
+        finalVotes = {};
+        
+        const promptData = [{ battleIndex: 'final', text: finalRoundPrompt }];
+        
+        players.forEach(p => {
+             if(p.id === 'host') handleClientStartRound(promptData, round);
+             else sendToClient(p.id, { type: 'START_ROUND', prompts: promptData, currentRound: round });
+        });
+        
+        broadcast({ type: 'START_TIMER', duration: INPUT_TIME_LIMIT, phase: 'input' });
+        runLocalTimer(INPUT_TIME_LIMIT, 'inputTimer', null, () => handleInputTimeout());
+        if(isHost) showScreen('screen-input');
+    }
+
+    // --- STANDARD ANSWER PHASE (MODIFIED FROM ORIGINAL startRound) ---
+    // Note: 'startRound' logic is now split into 'startPromptPhase' and 'distributePromptsAndStartRound'
 
     function handleInputTimeout() {
         if(isHost) {
@@ -1456,23 +1115,42 @@
         const mult = (round === 2 ? 2 : 1);
         const baseScore = 1000 * mult;
         
-        let scoreA = 0, scoreB = 0;
+        let votePointsA = 0;
+        let votePointsB = 0;
+        let bonusA = 0;
+        let bonusB = 0;
         let isQuiplash = false;
 
         if (total > 0) {
-            if (pA === 100) { scoreA += 1000; isQuiplash = true; }
-            if (pB === 100) { scoreB += 1000; isQuiplash = true; }
-            scoreA += Math.floor((pA / 100) * baseScore);
-            scoreB += Math.floor((pB / 100) * baseScore);
+            votePointsA = Math.floor((pA / 100) * baseScore);
+            votePointsB = Math.floor((pB / 100) * baseScore);
+
+            if (pA === 100) { bonusA = 1000; isQuiplash = true; }
+            if (pB === 100) { bonusB = 1000; isQuiplash = true; }
         }
+
+        // Split Logic: 75% to answerer, 25% to writer (bonus stays with answerer)
+        const writerShareA = Math.floor(votePointsA * 0.25);
+        const answererShareA = votePointsA - writerShareA + bonusA;
+
+        const writerShareB = Math.floor(votePointsB * 0.25);
+        const answererShareB = votePointsB - writerShareB + bonusB;
+
+        const writerTotalGain = writerShareA + writerShareB;
 
         const pl1 = players.find(p => p.id === b.p1Id);
         const pl2 = players.find(p => p.id === b.p2Id);
-        if(pl1) pl1.score += scoreA;
-        if(pl2) pl2.score += scoreB;
+        const writer = players.find(p => p.id === b.promptAuthorId);
+
+        if(pl1) pl1.score += answererShareA;
+        if(pl2) pl2.score += answererShareB;
+        if(writer) writer.score += writerTotalGain;
 
         const resPacket = {
-            type: 'VOTE_RESULT', pA, pB, scoreAddA: scoreA, scoreAddB: scoreB, isQuiplash,
+            type: 'VOTE_RESULT', pA, pB, 
+            scoreAddA: answererShareA, 
+            scoreAddB: answererShareB, 
+            isQuiplash,
             nameA: pl1 ? pl1.name : "???", nameB: pl2 ? pl2.name : "???"
         };
         broadcast(resPacket);
@@ -1534,7 +1212,7 @@
     function hostNextPhase() {
         if (round < 3) {
             round++;
-            startRound();
+            startPromptPhase();
         } else {
             location.reload();
         }
@@ -1609,6 +1287,7 @@
             alert(data.reason || "Join failed.");
             location.reload();
         }
+        else if (data.type === 'START_PROMPT_WRITING') handleClientPromptWriting(data.currentRound);
         else if (data.type === 'START_ROUND') handleClientStartRound(data.prompts, data.currentRound);
         else if (data.type === 'START_TIMER') {
              if(data.phase === 'input') runLocalTimer(data.duration, 'inputTimer', null, null);
@@ -1621,8 +1300,35 @@
         else if (data.type === 'SHOW_SCORES') renderScoreboard(data);
     }
 
+    function handleClientPromptWriting(roundNumber) {
+        if (roundNumber) round = roundNumber;
+        isWritingPrompts = true;
+        
+        // Setup UI for prompt writing
+        const roundTag = document.getElementById('roundTag');
+        roundTag.style.display = 'block';
+        roundTag.textContent = round === 3 ? "FINAL ROUND" : "ROUND " + round;
+        
+        // Reset Inputs
+        setSafeText('inputRoundTitle', "WRITE A PROMPT!");
+        setSafeText('promptCounter', "MAKE IT GOOD!");
+        setSafeText('inputPromptText', "Write a prompt for others to answer:");
+        document.getElementById('finalRoundNotice').style.display = 'none';
+        
+        const input = document.getElementById('answerInput');
+        input.value = "";
+        input.placeholder = "e.g. The worst flavor of ice cream...";
+        input.focus();
+        
+        document.getElementById('submitBtn').innerText = "SUBMIT PROMPT";
+        document.getElementById('inputForm').style.display = 'block';
+        document.getElementById('inputWaitMsg').style.display = 'none';
+        showScreen('screen-input');
+    }
+
     function handleClientStartRound(prompts, roundNumber) {
         if (roundNumber) round = roundNumber;
+        isWritingPrompts = false;
         myPrompts = prompts;
         currentPromptIndex = 0;
         myAnswers = {};
@@ -1633,6 +1339,7 @@
         showScreen('screen-input');
         document.getElementById('inputForm').style.display = 'block';
         document.getElementById('inputWaitMsg').style.display = 'none';
+        document.getElementById('submitBtn').innerText = "SUBMIT QUIP";
     }
 
     function renderCurrentInput() {
@@ -1649,36 +1356,59 @@
             setSafeText('promptCounter', `PROMPT ${currentPromptIndex + 1}/${myPrompts.length}`);
         }
         setSafeText('inputPromptText', p.text);
-        document.getElementById('answerInput').value = "";
-        document.getElementById('answerInput').focus();
+        
+        const input = document.getElementById('answerInput');
+        input.value = "";
+        input.placeholder = "WRITE SOMETHING FUNNY...";
+        input.focus();
     }
 
     function submitCurrentAnswer(btn) {
         let txt = document.getElementById('answerInput').value.trim();
-        if (txt === "") txt = getSafetyQuip();
-        const p = myPrompts[currentPromptIndex];
-        myAnswers[p.battleIndex] = txt;
         
-        currentPromptIndex++;
-        if(currentPromptIndex < myPrompts.length) {
-            renderCurrentInput();
-        } else {
-            clearInterval(gameTimerInterval);
+        if (isWritingPrompts) {
+            // Submitting a Prompt
+            if (txt === "") txt = FALLBACK_PROMPTS[Math.floor(Math.random()*FALLBACK_PROMPTS.length)];
+            
             document.getElementById('inputForm').style.display = 'none';
             document.getElementById('inputWaitMsg').style.display = 'block';
             
             if (isHost) {
-                processPlayerAnswers(myId, myAnswers);
+                handleHostData(myId, { type: 'SUBMIT_PROMPT', prompt: txt });
             } else {
-                sendToHost({ type: 'SUBMIT_ANSWERS', answers: myAnswers });
+                sendToHost({ type: 'SUBMIT_PROMPT', prompt: txt });
+            }
+        } else {
+            // Submitting an Answer
+            if (txt === "") txt = getSafetyQuip();
+            const p = myPrompts[currentPromptIndex];
+            myAnswers[p.battleIndex] = txt;
+            
+            currentPromptIndex++;
+            if(currentPromptIndex < myPrompts.length) {
+                renderCurrentInput();
+            } else {
+                clearInterval(gameTimerInterval);
+                document.getElementById('inputForm').style.display = 'none';
+                document.getElementById('inputWaitMsg').style.display = 'block';
+                
+                if (isHost) {
+                    processPlayerAnswers(myId, myAnswers);
+                } else {
+                    sendToHost({ type: 'SUBMIT_ANSWERS', answers: myAnswers });
+                }
             }
         }
     }
 
     function forceSubmitLocal() {
         if (document.getElementById('inputForm').style.display !== 'none') {
-            while(currentPromptIndex < myPrompts.length) {
+            if (isWritingPrompts) {
                 submitCurrentAnswer(null);
+            } else {
+                while(currentPromptIndex < myPrompts.length) {
+                    submitCurrentAnswer(null);
+                }
             }
         }
     }
@@ -1718,7 +1448,8 @@
     function renderFinalVoteScreen(data) {
         showScreen('screen-final-vote');
         setSafeText('finalVotePromptText', data.prompt);
-        setSafeText('finalVoteStatus', "VOTE FOR YOUR FAVORITE!");
+        // Reuse for both prompt voting and answer voting
+        setSafeText('finalVoteStatus', data.prompt === "VOTE FOR THE BEST PROMPT!" ? "PICK THE FUNNIEST PROMPT!" : "VOTE FOR YOUR FAVORITE!");
         
         const list = document.getElementById('finalVoteList');
         list.innerHTML = '';
@@ -1867,7 +1598,7 @@
             let bg = i === 0 ? "#ffd700" : i === 1 ? "#c0c0c0" : i === 2 ? "#cd7f32" : "#f0f0f0";
             let border = i === 0 ? "#b8860b" : i === 1 ? "#7f7f7f" : i === 2 ? "#8b4513" : "#ccc";
             row.style.cssText = `background:${bg}; border:3px solid ${border}; margin-bottom:10px; padding:15px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; font-family:var(--font-sub); font-size:1.5rem; box-shadow:5px 5px 0 rgba(0,0,0,0.1);`;
-            row.innerHTML = `<div style="display:flex;align-items:center;"><div style="font-size:2rem;width:40px;text-align:center;margin-right:10px;">${i+1}</div><div>${p.name}</div></div><div>${p.score}</div>`;
+            row.innerHTML = `<div style="display:flex;align-items:center;"><div style="font-size:2rem;width:40px;text-align:center;margin-right:10px;">${i+1}</div><div>${p.name}</div></div><div>${p.score}</div></div>`;
             list.appendChild(row);
         });
 
