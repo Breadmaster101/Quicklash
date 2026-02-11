@@ -135,10 +135,12 @@
             box-shadow: 5px 5px 0px #000;
             transition: transform 0.1s, box-shadow 0.1s;
             margin: 10px;
+            position: relative;
+            top: 0;
         }
         
         .btn:hover:not(:disabled) { transform: translate(-2px, -2px); box-shadow: 7px 7px 0px #000; background: #ff8800; }
-        .btn:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 3px 3px 0px #000; }
+        .btn:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 3px 3px 0px #000; top: 2px; }
         .btn:disabled { background: #777; color: #ccc; cursor: not-allowed; box-shadow: none; transform: translate(5px, 5px); }
 
         .player-badge {
@@ -202,9 +204,11 @@
             box-shadow: 8px 8px 0 rgba(0,0,0,0.2);
             transition: all 0.2s;
             word-break: break-word;
+            top: 0;
         }
 
         .answer-btn:hover { transform: scale(1.02); z-index: 5; }
+        .answer-btn:active { top: 5px; box-shadow: 0 0 0 transparent; }
         .answer-btn.selected { background: var(--accent-orange); color: white; transform: scale(1.05); }
         .answer-btn.dimmed { opacity: 0.5; filter: grayscale(1); cursor: default; }
         .answer-btn.winner { background: var(--accent-green); color: black; animation: pulse 0.8s infinite; border-color: white; }
@@ -381,11 +385,6 @@
                  <span class="toggle-label">P2P</span>
             </div>
             
-            <!-- Added Note: Hidden by default, toggled by JS -->
-            <div id="serverNote" style="display:none; pointer-events: auto; font-family: var(--font-body); font-size: 0.8rem; background: #ffffcc; border: 2px solid #000; padding: 5px; border-radius: 10px; text-align: center; max-width: 180px; box-shadow: 2px 2px 0 rgba(0,0,0,0.2);">
-                ⚠️ <b>Note:</b> Server may take ~1 min to wake up after clicking "HOST GAME".
-            </div>
-
             <!-- Round Info (Visible during game) -->
             <div class="info-tag" id="roundTag" style="display:none">ROUND 1</div>
         </div>
@@ -554,13 +553,66 @@
     let myAnswers = {}; 
 
     let gameTimerInterval = null;
+    let warmUpSocket = null;
 
-    // --- NEW FUNCTION TO TOGGLE NOTE ---
+    // --- SECURITY UTILITY: XSS PREVENTION ---
+    const escapeHTML = (str) => {
+        if(!str) return str;
+        return String(str).replace(/[&<>'"]/g, 
+            tag => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                "'": '&#39;',
+                '"': '&quot;'
+            }[tag]));
+    };
+
+    // --- SESSION RECOVERY ---
+    window.addEventListener('load', () => {
+        // Pre-fill fields if user was previously connected
+        const storedName = sessionStorage.getItem('ql_name');
+        const storedRoom = sessionStorage.getItem('ql_room');
+        if (storedName) document.getElementById('playerNameInput').value = storedName;
+        if (storedRoom) document.getElementById('roomCodeInput').value = storedRoom;
+        
+        // Initialize Server/P2P toggle state logic
+        toggleServerNote(); 
+    });
+
+    // --- NEW FUNCTION TO TOGGLE NOTE & WAKE UP SERVER ---
     function toggleServerNote() {
         const chk = document.getElementById('socketToggle');
-        const note = document.getElementById('serverNote');
+        const btnHost = document.getElementById('btnHost');
+        
         // SERVER mode is when unchecked (left side)
-        note.style.display = !chk.checked ? 'block' : 'none';
+        const isServerMode = !chk.checked;
+
+        if (isServerMode) {
+            // Wake up logic
+            btnHost.disabled = true;
+            btnHost.innerText = "WAKING SERVER...";
+            
+            // Connect briefly to wake it up
+            if (!warmUpSocket) {
+                warmUpSocket = io(SOCKET_SERVER_URL);
+                warmUpSocket.on('connect', () => {
+                    btnHost.disabled = false;
+                    btnHost.innerText = "HOST GAME";
+                    if(warmUpSocket) { warmUpSocket.disconnect(); warmUpSocket = null; }
+                });
+                warmUpSocket.on('connect_error', () => {
+                    // Even if error, it might be up, or we let user try
+                    btnHost.disabled = false;
+                    btnHost.innerText = "HOST GAME";
+                });
+            }
+        } else {
+            // P2P Mode
+            btnHost.disabled = false;
+            btnHost.innerText = "HOST GAME";
+            if(warmUpSocket) { warmUpSocket.disconnect(); warmUpSocket = null; }
+        }
     }
 
     const generateCode = () => {
@@ -583,7 +635,6 @@
     
     const hideConnectionToggle = () => {
         document.getElementById('connectionModeContainer').style.display = 'none';
-        document.getElementById('serverNote').style.display = 'none'; // Also hide the note
     };
 
     // --- NETWORKING ABSTRACTION ---
@@ -662,6 +713,10 @@
         
         playerName = rawName.substring(0,10).toUpperCase();
         roomCode = generateCode();
+        
+        // Session Save
+        sessionStorage.setItem('ql_name', playerName);
+        sessionStorage.setItem('ql_role', 'host');
 
         myId = 'host'; 
         isHost = true;
@@ -710,6 +765,7 @@
                     c.on('data', (d) => handleHostData(c.peer, d));
                     c.on('close', () => {
                         delete connections[c.peer];
+                        // Don't fully remove for reconnect logic, but visual removal is OK for lobby
                         players = players.filter(p => p.id !== c.peer);
                         renderLobby();
                         broadcast({ type: 'UPDATE_LOBBY', players });
@@ -750,14 +806,21 @@
         if (data.type === 'JOIN') {
             const name = (data.name || "Anon").substring(0,12).toUpperCase();
             
-            const isNameTaken = players.some(p => p.name.toUpperCase() === name.toUpperCase());
-            if (isNameTaken) {
-                sendToClient(pid, { type: 'JOIN_REJECTED', reason: 'That name is already taken!' });
-                if (!useSocket) setTimeout(() => connections[pid]?.close(), 500);
-                return;
-            }
-
-            if(!players.find(p=>p.id === pid)) {
+            // Reconnection Logic / Name Collision Logic
+            const existingPlayer = players.find(p => p.name.toUpperCase() === name.toUpperCase());
+            
+            if (existingPlayer) {
+                // Assuming Reconnection: Update ID
+                if (existingPlayer.id !== pid) {
+                    const oldId = existingPlayer.id;
+                    existingPlayer.id = pid; 
+                    // Send basic sync packet
+                    sendToClient(pid, { type: 'UPDATE_LOBBY', players });
+                    // If we needed to clean up old P2P connections, we could, but PeerJS handles drop off.
+                }
+                // Do not reject, allow them back in.
+            } else {
+                // New Player
                 players.push({ id: pid, name, score: 0 });
                 renderLobby();
                 broadcast({ type: 'UPDATE_LOBBY', players });
@@ -800,10 +863,11 @@
 
     function renderLobby() {
         const div = document.getElementById('lobbyPlayerList');
+        // XSS SAFE: escapeHTML used on name
         div.innerHTML = players.map(p => `
             <div class="player-badge">
-                <div class="avatar-circle">${p.name.substring(0,1)}</div>
-                ${p.name}
+                <div class="avatar-circle">${escapeHTML(p.name).substring(0,1)}</div>
+                ${escapeHTML(p.name)}
             </div>
         `).join('');
         
@@ -871,20 +935,6 @@
         // Shuffle prompts
         promptList.sort(() => 0.5 - Math.random());
         
-        // Create Battles
-        // Standard Quiplash Logic: P1 vs P2 on Prompt X.
-        // We want to avoid the Author answering their own prompt if possible.
-        // Simple ring assignment: 
-        // Battle i uses Prompt i.
-        // Player A = players[i]
-        // Player B = players[(i+1)%count]
-        // If Prompt i author is A or B, swap prompt?
-        
-        // Simplified approach for code compactness:
-        // 1. Assign prompts to battles.
-        // 2. Assign players to battles.
-        // 3. If collision, just allow it (it's a party game).
-        
         const shuffledPlayers = [...players].sort(()=>0.5-Math.random());
         
         for(let i=0; i<count; i++) {
@@ -895,20 +945,10 @@
             // Try to find a prompt not written by these two
             let availablePrompt = promptList.find(pr => pr.authorId !== p1.id && pr.authorId !== p2.id);
             
-            // If strict separation isn't possible (e.g. 3 players), just take the first one
-            // Note: In 3 players, P1, P2, P3. 
-            // Battle 1: P1 vs P2. Prompt author P3.
-            // Battle 2: P2 vs P3. Prompt author P1.
-            // Battle 3: P3 vs P1. Prompt author P2.
-            // This works perfectly for 3 players.
-            
             if (!availablePrompt) {
                  availablePrompt = promptList[0]; // Fallback
             }
             
-            // Remove used prompt to avoid repetition if count allows, 
-            // but we need exactly 'count' battles, and we have 'count' prompts.
-            // So we remove it from the search list.
             promptList = promptList.filter(p => p !== availablePrompt);
 
             battles.push({
@@ -1232,6 +1272,11 @@
         
         playerName = rawName.substring(0,10);
         roomCode = document.getElementById('roomCodeInput').value.toUpperCase();
+        
+        // Session Save
+        sessionStorage.setItem('ql_name', playerName);
+        sessionStorage.setItem('ql_room', roomCode);
+        sessionStorage.setItem('ql_role', 'client');
 
         if (useSocket) {
             // Socket.io Mode
@@ -1416,7 +1461,6 @@
     function renderVoteScreen(data) {
         showScreen('screen-vote');
         setSafeText('votePromptText', data.prompt);
-        // We do NOT use setSafeText on the spans here anymore, we build the HTML directly below.
         
         const btnA = document.getElementById('btnVoteA');
         const btnB = document.getElementById('btnVoteB');
@@ -1427,9 +1471,12 @@
             b.style.pointerEvents = 'auto';
         });
 
-        // Set HTML directly from data to avoid appending "0%" from existing innerText
-        btnA.innerHTML = `<span id="textVoteA">${data.a1}</span><div class="vote-perc" id="percA">0%</div>`;
-        btnB.innerHTML = `<span id="textVoteB">${data.a2}</span><div class="vote-perc" id="percB">0%</div>`;
+        // XSS SAFE: Using escapeHTML for user content
+        const safeA1 = escapeHTML(data.a1);
+        const safeA2 = escapeHTML(data.a2);
+
+        btnA.innerHTML = `<span id="textVoteA">${safeA1}</span><div class="vote-perc" id="percA">0%</div>`;
+        btnB.innerHTML = `<span id="textVoteB">${safeA2}</span><div class="vote-perc" id="percB">0%</div>`;
 
         document.getElementById('percA').style.transform = 'scale(0)';
         document.getElementById('percB').style.transform = 'scale(0)';
@@ -1465,8 +1512,9 @@
                 btn.onclick = () => castFinalVote(ans.playerId);
             }
             
+            // XSS SAFE: escapeHTML used on answer
             btn.innerHTML = `
-                <span>${ans.answer}</span>
+                <span>${escapeHTML(ans.answer)}</span>
                 <div class="vote-perc">0%</div>
             `;
             list.appendChild(btn);
@@ -1517,10 +1565,11 @@
         const textA = document.getElementById('textVoteA');
         const textB = document.getElementById('textVoteB');
 
+        // XSS SAFE: textContent used for answer text, HTML used for name but escaped
         textA.textContent = `"${textA.textContent}"`;
-        textA.innerHTML += `<br><span style="font-size:1rem; color:#666; margin-top:5px; display:block;">— ${data.nameA}</span>`;
+        textA.innerHTML += `<br><span style="font-size:1rem; color:#666; margin-top:5px; display:block;">— ${escapeHTML(data.nameA)}</span>`;
         textB.textContent = `"${textB.textContent}"`;
-        textB.innerHTML += `<br><span style="font-size:1rem; color:#666; margin-top:5px; display:block;">— ${data.nameB}</span>`;
+        textB.innerHTML += `<br><span style="font-size:1rem; color:#666; margin-top:5px; display:block;">— ${escapeHTML(data.nameB)}</span>`;
 
         pA.style.transform = 'scale(1)'; pB.style.transform = 'scale(1)';
         animateValue(pA, 0, data.pA, 1000); animateValue(pB, 0, data.pB, 1000);
@@ -1557,7 +1606,8 @@
                 if (pInfo) {
                     const nameSpan = document.createElement('span');
                     nameSpan.style.cssText = "font-size:1rem; color:#666; margin-top:5px; display:block;";
-                    nameSpan.textContent = `— ${pInfo.name}`;
+                    // XSS SAFE: escapeHTML used on name
+                    nameSpan.textContent = `— ${escapeHTML(pInfo.name)}`;
                     btn.appendChild(nameSpan);
                 }
 
@@ -1598,7 +1648,8 @@
             let bg = i === 0 ? "#ffd700" : i === 1 ? "#c0c0c0" : i === 2 ? "#cd7f32" : "#f0f0f0";
             let border = i === 0 ? "#b8860b" : i === 1 ? "#7f7f7f" : i === 2 ? "#8b4513" : "#ccc";
             row.style.cssText = `background:${bg}; border:3px solid ${border}; margin-bottom:10px; padding:15px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; font-family:var(--font-sub); font-size:1.5rem; box-shadow:5px 5px 0 rgba(0,0,0,0.1);`;
-            row.innerHTML = `<div style="display:flex;align-items:center;"><div style="font-size:2rem;width:40px;text-align:center;margin-right:10px;">${i+1}</div><div>${p.name}</div></div><div>${p.score}</div></div>`;
+            // XSS SAFE: escapeHTML used on name
+            row.innerHTML = `<div style="display:flex;align-items:center;"><div style="font-size:2rem;width:40px;text-align:center;margin-right:10px;">${i+1}</div><div>${escapeHTML(p.name)}</div></div><div>${p.score}</div></div>`;
             list.appendChild(row);
         });
 
@@ -1608,9 +1659,6 @@
              btn.innerText = data.isFinal ? "START NEW GAME" : "START NEXT ROUND";
          }
      }
-     
-     // Initialize the server note visibility based on default checkbox state
-     toggleServerNote();
  </script>
 </body>
 </html>
